@@ -1,0 +1,27 @@
+{
+  "name": "shomer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shomer - Production-ready monorepo",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "test": "pnpm --recursive test",
+    "lint": "pnpm --recursive lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "typecheck": "pnpm --recursive typecheck",
+    "generate:client": "pnpm --filter @shomer/shared generate"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "prisma": "5.22.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=8"
+  },
+  "dependencies": {
+    "@prisma/client": "5.22.0"
+  }
+}

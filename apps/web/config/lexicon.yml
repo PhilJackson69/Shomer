@@ -1,0 +1,78 @@
+weapons:
+  - gun
+  - rifle
+  - knife
+  - stab
+  - shoot
+  - bomb
+  - explosive
+  - firebomb
+  - molotov
+  - grenade
+  - ammunition
+  - bullet
+  - ammo
+  - pipe bomb
+  - improvised explosive
+
+targets:
+  - synagogue
+  - shul
+  - temple
+  - jewish center
+  - chabad
+  - hebrew
+  - israeli
+  - jewish
+  - mosque
+  - church
+  - school
+  - hospital
+  - government building
+
+time_hints:
+  - tonight
+  - tomorrow
+  - friday
+  - saturday
+  - sunday
+  - shabbat
+  - sabbath
+  - 8 pm
+  - 9 pm
+  - 10 pm
+  - midnight
+  - dawn
+  - morning
+
+location_hints:
+  - address
+  - street
+  - avenue
+  - building
+  - location
+  - coordinates
+  - map
+
+planning:
+  - plan
+  - plot
+  - scheme
+  - operation
+  - mission
+  - target
+  - hit
+  - gather
+  - meet
+  - coordinate
+  - execute
+  - carry out
+
+exclusions:
+  - paintball
+  - fundraiser
+  - charity drive
+  - security drill
+  - water guns
+  - kitchen knife skills
+

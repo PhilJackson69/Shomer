@@ -1,0 +1,103 @@
+openapi: 3.0.3
+info:
+  title: Shomer API
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/alerts:
+    get:
+      summary: List alerts
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+        - in: query
+          name: risk
+          schema: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        - in: query
+          name: region
+          schema: { type: string }
+        - in: query
+          name: verified
+          schema: { type: string, enum: [true, false] }
+      responses:
+        '200': { description: OK }
+  /api/alerts/list:
+    get:
+      summary: Cursor list
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - in: query
+          name: cursor
+          schema: { type: string }
+  /api/alerts/export:
+    get:
+      summary: Stream CSV of alerts
+      parameters:
+        - in: query
+          name: sinceHours
+          schema: { type: integer, default: 168 }
+        - in: query
+          name: risk
+          schema: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        - in: query
+          name: region
+          schema: { type: string }
+        - in: query
+          name: verified
+          schema: { type: string, enum: [true, false] }
+  /api/alerts/{id}/verify:
+    post:
+      summary: Verify alert (session RBAC or signed URL)
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+  /api/alerts/{id}/dismiss:
+    post:
+      summary: Dismiss alert (session RBAC or signed URL)
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+  /api/alerts/bulk/verify:
+    post:
+      summary: Bulk verify
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: string } }
+  /api/alerts/bulk/dismiss:
+    post:
+      summary: Bulk dismiss
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: string } }
+  /api/scan:
+    post:
+      summary: Ingest posts and create alerts (org-scoped)
+  /api/collect/rss:
+    post:
+      summary: Collect RSS items (Authorization: Bearer <API KEY>, optional HMAC)
+      parameters: []
+  /api/events:
+    get:
+      summary: SSE stream of events
+  /api/health:
+    get:
+      summary: Readiness (DB + Redis)
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+

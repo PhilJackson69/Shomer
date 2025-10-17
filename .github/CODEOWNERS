@@ -1,0 +1,25 @@
+# Code owners for Shomer project
+# These users will be automatically requested for review when PRs modify these files
+
+# Default owners for everything
+*                                   @shomer-team
+
+# API code
+/apps/api/                          @shomer-backend-team
+
+# Web app code
+/apps/web/                          @shomer-frontend-team
+
+# Infrastructure
+/infra/                             @shomer-devops-team
+/docker-compose.yml                 @shomer-devops-team
+/.github/workflows/                 @shomer-devops-team
+
+# Security and governance docs
+/docs/SECURITY.md                   @shomer-security-team
+/docs/PRIVACY.md                    @shomer-legal-team
+/docs/GOVERNANCE.md                 @shomer-compliance-team
+
+# Architecture decisions
+/docs/adr/                          @shomer-architecture-team
+

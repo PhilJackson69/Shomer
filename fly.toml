@@ -1,0 +1,20 @@
+app = "shomer"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "apps/web/Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  NEXTAUTH_URL = "https://shomer.fly.dev"
+
+[[services]]
+  internal_port = 3000
+  processes = ["app"]
+  protocol = "tcp"
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80

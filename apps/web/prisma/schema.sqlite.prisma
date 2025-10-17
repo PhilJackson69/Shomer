@@ -1,0 +1,356 @@
+// Prisma schema for Shomer MVP
+// DB: SQLite (Development)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.db"
+}
+
+// SQLite doesn't support enums, using String instead
+// Role: ADMIN, MODERATOR, VIEWER
+
+// SQLite doesn't support enums, using String instead
+// RiskLevel: LOW, MEDIUM, HIGH
+
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  email        String   @unique
+  name         String?
+  role         String   @default("VIEWER")
+  passwordHash String?
+
+  alerts       Alert[]
+  memberships  Membership[]
+  openedIncidents Incident[] @relation("IncidentOpenedBy")
+  assignedIncidents Incident[] @relation("IncidentAssignedTo")
+  onCall       OnCall[]
+  onCallAudits OnCallAudit[]
+  incidentNotes IncidentNote[]
+  incidentAssignments IncidentAssignment[]
+  savedSearches SavedSearch[]
+}
+
+model Source {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // e.g. "x.com", "reddit", "news", "manual"
+  kind      String
+  // e.g. post id / url domain / feed id
+  externalId String? @unique
+  url       String?
+  region    String? // ISO-3166-2 or custom like "SF-Bay-Area"
+  topic     String?
+  orgId     String?
+  organization Organization? @relation(fields:[orgId], references:[id])
+  alerts    Alert[]
+
+  @@index([kind])
+  @@index([region])
+  @@index([orgId])
+}
+
+model Alert {
+  id         String    @id @default(cuid())
+  createdAt  DateTime  @default(now())
+
+  title      String
+  summary    String
+  contentUrl String?
+
+  risk       String @default("LOW")
+  score      Int       @default(0) // 0-100 conservative risk score
+  verified   Boolean   @default(false)
+
+  region     String?   // for map clustering / filtering
+  topic      String?   // free text topic: "synagogue", "school", etc.
+
+  // relationships
+  sourceId   String?
+  source     Source?   @relation(fields: [sourceId], references: [id])
+
+  reporterId String?   // optional user that reviewed/escalated
+  reporter   User?     @relation(fields: [reporterId], references: [id])
+
+  // metadata for dedupe
+  hash       String?   @unique
+  dismissedAt DateTime?
+  lat       Float?
+  lng       Float?
+
+  orgId      String
+  organization Organization @relation(fields:[orgId], references:[id])
+  alertIncidents AlertIncident[]
+
+  @@index([risk, score])
+  @@index([createdAt])
+  @@index([region])
+  @@index([verified, dismissedAt, createdAt])
+  @@index([lat, lng])
+  @@index([orgId, createdAt])
+}
+
+model Organization {
+  id        String      @id @default(cuid())
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  name      String      @unique
+  slug      String      @unique
+  shareToken String?    @unique
+
+  memberships Membership[]
+  apiKeys     ApiKey[]
+  webhooks    Webhook[]
+  alerts      Alert[]
+  sources     Source[]
+  onCall      OnCall[]
+  onCallAudits OnCallAudit[]
+  incidents   Incident[]
+  incidentNotes IncidentNote[]
+  incidentAssignments IncidentAssignment[]
+  savedSearches SavedSearch[]
+  setting     OrganizationSetting?
+
+  @@index([slug])
+  @@index([shareToken])
+}
+
+model Membership {
+  id        String      @id @default(cuid())
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  role      String        @default("VIEWER")
+  userId    String
+  orgId     String
+
+  user      User        @relation(fields:[userId], references:[id])
+  organization Organization @relation(fields:[orgId], references:[id])
+
+  @@unique([userId, orgId])
+  @@index([orgId, role])
+}
+
+model ApiKey {
+  id        String      @id @default(cuid())
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  name      String
+  keyHash   String      @unique
+  lastUsedAt DateTime?
+
+  orgId     String
+  organization Organization @relation(fields:[orgId], references:[id])
+
+  active    Boolean     @default(true)
+
+  @@index([orgId, active])
+}
+
+model Webhook {
+  id        String      @id @default(cuid())
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  url       String
+  secret    String      // HMAC signing secret
+  events    String      // CSV of events: alert.created,alert.verified,alert.dismissed
+
+  orgId     String
+  organization Organization @relation(fields:[orgId], references:[id])
+
+  active    Boolean     @default(true)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  orgId     String
+  actorId   String?
+  actorKind String
+  action    String
+
+  alertId   String?
+  meta      String?
+
+  @@index([orgId, createdAt])
+  @@index([alertId, createdAt])
+}
+
+model WebhookDelivery {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orgId     String
+  webhookId String?
+  event     String
+  payload   String
+  attempt   Int      @default(1)
+  status    Int
+  error     String?
+
+  dead      Boolean  @default(false)
+
+  @@index([orgId, createdAt])
+  @@index([webhookId, createdAt])
+  @@index([dead])
+}
+
+model OnCall {
+  id        String   @id @default(cuid())
+  orgId     String
+  region    String?
+  userId    String
+  startsAt  DateTime
+  endsAt    DateTime
+
+  user      User     @relation(fields:[userId], references:[id])
+  organization Organization @relation(fields:[orgId], references:[id])
+
+  @@index([orgId, region, startsAt, endsAt])
+}
+
+model OnCallAudit {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  
+  action    String   // CREATE, UPDATE, DELETE
+  shiftId   String   // OnCall.id
+  userId    String   // User who performed the action
+  orgId     String   // Organization ID
+  
+  // Store the shift data at time of action
+  oldData   String?  // JSON of previous state (for UPDATE/DELETE)
+  newData   String?  // JSON of new state (for CREATE/UPDATE)
+  
+  user      User     @relation(fields:[userId], references:[id])
+  organization Organization @relation(fields:[orgId], references:[id])
+  
+  @@index([orgId, createdAt])
+  @@index([shiftId, createdAt])
+}
+
+// SQLite doesn't support enums, using String instead
+// IncidentStatus: OPEN, IN_PROGRESS, RESOLVED, DISMISSED
+
+model Incident {
+  id         String         @id @default(cuid())
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  orgId      String
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  title      String
+  status     String @default("OPEN")
+  severity   String      @default("MEDIUM")
+  summary    String?
+  slackChannel  String?
+  slackThreadTs String?
+
+  openedById String?
+  openedBy   User?          @relation("IncidentOpenedBy", fields: [openedById], references: [id])
+
+  assignedToId String?
+  assignedTo   User?        @relation("IncidentAssignedTo", fields: [assignedToId], references: [id])
+
+  parentId  String?
+  parent    Incident? @relation("IncidentParent", fields: [parentId], references: [id])
+  children  Incident[] @relation("IncidentParent")
+
+  alerts     AlertIncident[]
+  notes      IncidentNote[]
+  assignments IncidentAssignment[]
+
+  @@index([orgId, status, updatedAt])
+  @@index([assignedToId, status])
+}
+
+model IncidentNote {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+
+  orgId      String
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id])
+
+  authorId   String?
+  author     User?    @relation(fields: [authorId], references: [id])
+
+  body       String
+}
+
+model IncidentAssignment {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+
+  orgId      String
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id])
+
+  assigneeId String
+  assignee   User     @relation(fields: [assigneeId], references: [id])
+}
+
+model AlertIncident {
+  alertId    String
+  incidentId String
+  createdAt  DateTime @default(now())
+
+  alert      Alert    @relation(fields: [alertId], references: [id])
+  incident   Incident @relation(fields: [incidentId], references: [id])
+
+  @@id([alertId, incidentId])
+  @@index([incidentId])
+}
+model Setting {
+  id        String   @id @default("default")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  alertThreshold Int     @default(65)
+  slackMinLevel  String  @default("HIGH") // LOW|MEDIUM|HIGH
+}
+
+model SavedSearch {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orgId     String
+  ownerId   String?
+  name      String
+  kind      String   @default("alerts")
+  query     String
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  owner       User?         @relation(fields: [ownerId], references: [id])
+
+  @@index([orgId, kind, updatedAt])
+}
+
+model OrganizationSetting {
+  orgId             String   @id
+  preferredTimezone String   @default("UTC")
+  displayName       String?
+  showRegion        Boolean  @default(true)
+  timeFormat        String   @default("24h")
+  org               Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+

@@ -1,0 +1,39 @@
+name: Threat Replay Check
+on:
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - ".github/workflows/threat-replay.yml"
+  workflow_dispatch: {}
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install deps
+        run: pnpm i --frozen-lockfile
+
+      - name: Start Redis
+        run: docker run -p 6379:6379 -d --name redis-ci redis:7
+
+      - name: Env for CI
+        run: |
+          echo "USE_REDIS=true" >> $GITHUB_ENV
+          echo "REDIS_URL=redis://localhost:6379" >> $GITHUB_ENV
+          echo "SHOMER_ALERT_SCORE=3.5" >> $GITHUB_ENV
+
+      - name: Run replay + assert
+        run: pnpm ci:replay
+      - name: Retention dry-run
+        run: RETENTION_DRY_RUN=true pnpm maint:retention
+
+

@@ -1,0 +1,86 @@
+# Dependabot configuration for automated dependency updates
+# Phase 2.5 Hardening: Daily security updates for dependencies
+
+version: 2
+updates:
+  # Python dependencies (FastAPI backend)
+  - package-ecosystem: "pip"
+    directory: "/apps/api"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "shomer-security-team"
+    labels:
+      - "dependencies"
+      - "security"
+      - "backend"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # Node.js dependencies (Next.js frontend)
+  - package-ecosystem: "npm"
+    directory: "/apps/web"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "shomer-security-team"
+    labels:
+      - "dependencies"
+      - "security"
+      - "frontend"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # Shared packages
+  - package-ecosystem: "npm"
+    directory: "/packages/shared"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "shared"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # Docker base images
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+      - "infrastructure"
+    commit-message:
+      prefix: "deps"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci-cd"
+    commit-message:
+      prefix: "ci"

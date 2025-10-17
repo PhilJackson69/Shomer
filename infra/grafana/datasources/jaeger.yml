@@ -1,0 +1,15 @@
+# Grafana datasource provisioning for Jaeger (tracing)
+
+apiVersion: 1
+
+datasources:
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    editable: true
+    jsonData:
+      tracesToLogs:
+        datasourceUid: 'prometheus'
+        tags: ['trace_id']
+

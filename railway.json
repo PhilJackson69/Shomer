@@ -1,0 +1,12 @@
+{
+  "projects": [
+    {
+      "name": "shomer",
+      "services": [
+        { "name": "web", "source": { "dockerfilePath": "apps/web/Dockerfile" }, "envVars": ["DATABASE_URL","REDIS_URL","NEXTAUTH_URL","NEXTAUTH_SECRET","ACTION_SECRET","ACTION_TTL_SECONDS","SLACK_WEBHOOK_URL","SLACK_MIN_LEVEL","MAPBOX_TOKEN"] },
+        { "name": "postgres", "provider": "postgres" },
+        { "name": "redis", "provider": "redis" }
+      ]
+    }
+  ]
+}

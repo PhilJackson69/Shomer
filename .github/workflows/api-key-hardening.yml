@@ -1,0 +1,127 @@
+name: API Key Hardening Validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    name: API Key Hardening Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Setup test environment
+        run: |
+          cd apps/web
+          cp env.sqlite.example .env.sqlite
+          echo "ACTION_SECRET=test-secret-$(date +%s)" >> .env.sqlite
+          
+      - name: Run validation pipeline
+        run: |
+          cd apps/web
+          ./scripts/go-live-validation.sh
+          
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-logs-${{ github.sha }}
+          path: apps/web/logs/
+          retention-days: 30
+          
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'apps/web/logs/validation-results.txt';
+            
+            let comment = '## 🔍 API Key Hardening Validation Results\n\n';
+            
+            if (fs.existsSync(path)) {
+              const results = fs.readFileSync(path, 'utf8');
+              comment += '```\n' + results + '\n```\n\n';
+            }
+            
+            comment += `✅ Validation pipeline completed for commit \`${context.sha.substring(0, 7)}\``;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  audit:
+    name: Weekly Compliance Audit
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Run compliance audit
+        run: |
+          cd apps/web
+          ./scripts/week-one-audit.sh --cron >> logs/audit-$(date +%F).log
+          
+      - name: Upload audit logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-audit-${{ github.run_number }}
+          path: apps/web/logs/audit-*.log
+          retention-days: 90
+          
+      - name: Create audit report issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Compliance Audit Failed - ${new Date().toISOString().split('T')[0]}`,
+              body: `Automated compliance audit failed for commit \`${context.sha}\`.
+
+**Action Required**: Review audit logs and address any compliance issues.
+
+**Audit Logs**: Available in workflow artifacts
+**Commit**: ${context.sha}
+**Timestamp**: ${new Date().toISOString()}`,
+              labels: ['compliance', 'audit', 'priority:high']
+            });

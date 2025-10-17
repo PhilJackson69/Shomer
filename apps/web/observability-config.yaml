@@ -1,0 +1,202 @@
+# Observability configuration for API Keys hardening
+# Copy these into your monitoring dashboards and alerting systems
+
+# Log fields (ensure your securityLogger emits these)
+log_fields:
+  event: "apikey.auth | apikey.scope_denied | apikey.rate_limited"
+  orgId: "string"
+  keyId: "string"
+  route: "string"
+  method: "string"
+  scope: "string (optional)"
+  rpm: "number (optional)"
+
+# Datadog monitors (examples)
+datadog_monitors:
+  scope_denials_spike:
+    name: "API Key Scope Denials Spike"
+    type: "log alert"
+    query: |
+      sum(last_5m):events("event:apikey.scope_denied env:prod").as_count()
+      / sum(last_5m):events("event:apikey.auth env:prod").as_count() > 0.01
+    message: |
+      High rate of API key scope denials detected.
+      - Scope denial rate: {{value}}%
+      - Check for misconfigured keys or scope changes
+      - @slack-alerts @pagerduty
+    tags: ["api-keys", "security", "scope-denial"]
+
+  rate_limit_surge:
+    name: "API Key Rate Limit Surge"
+    type: "log alert"
+    query: |
+      sum(last_5m):events("event:apikey.rate_limited env:prod").as_count() > 100
+    message: |
+      High volume of API key rate limiting detected.
+      - Rate limited requests: {{value}}
+      - Check for abuse or misconfigured rate limits
+      - @slack-alerts @pagerduty
+    tags: ["api-keys", "rate-limiting", "security"]
+
+  auth_failure_spike:
+    name: "API Key Authentication Failures"
+    type: "log alert"
+    query: |
+      sum(last_5m):events("event:apikey.invalid env:prod").as_count() > 50
+    message: |
+      High volume of API key authentication failures.
+      - Failed auth attempts: {{value}}
+      - Check for compromised keys or configuration issues
+      - @slack-alerts
+    tags: ["api-keys", "authentication", "security"]
+
+# Prometheus metrics (if you export metrics)
+prometheus_metrics:
+  counters:
+    - name: "apikey_auth_total"
+      help: "Total API key authentications"
+      labels: ["route", "scope", "env", "status"]
+    
+    - name: "apikey_scope_denied_total"
+      help: "Total API key scope denials"
+      labels: ["route", "required_scope", "env"]
+    
+    - name: "apikey_rate_limited_total"
+      help: "Total API key rate limit hits"
+      labels: ["route", "env", "rpm"]
+    
+    - name: "apikey_invalid_total"
+      help: "Total invalid API key attempts"
+      labels: ["route", "env", "reason"]
+
+  histograms:
+    - name: "apikey_auth_duration_seconds"
+      help: "API key authentication duration"
+      labels: ["route", "env"]
+      buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0]
+
+# Grafana dashboard panels
+grafana_panels:
+  authentication_success_rate:
+    title: "API Key Authentication Success Rate"
+    type: "stat"
+    query: |
+      sum(rate(apikey_auth_total{status="success"}[5m])) 
+      / sum(rate(apikey_auth_total[5m])) * 100
+    unit: "percent"
+    thresholds:
+      - color: "red"
+        value: 95
+      - color: "yellow"
+        value: 98
+      - color: "green"
+        value: 99
+
+  scope_denial_rate:
+    title: "API Key Scope Denial Rate"
+    type: "graph"
+    query: |
+      sum(rate(apikey_scope_denied_total[5m])) 
+      / sum(rate(apikey_auth_total[5m])) * 100
+    unit: "percent"
+    y_axis:
+      max: 5
+    alerts:
+      - condition: "last() > 1"
+        message: "Scope denial rate above 1%"
+
+  rate_limiting_volume:
+    title: "API Key Rate Limiting Volume"
+    type: "graph"
+    query: |
+      sum(rate(apikey_rate_limited_total[5m]))
+    unit: "reqps"
+    alerts:
+      - condition: "last() > 10"
+        message: "High rate limiting volume detected"
+
+  top_denied_scopes:
+    title: "Top Denied Scopes"
+    type: "table"
+    query: |
+      topk(10, sum by (required_scope) (rate(apikey_scope_denied_total[1h])))
+
+  authentication_latency:
+    title: "API Key Authentication Latency"
+    type: "graph"
+    query: |
+      histogram_quantile(0.95, sum(rate(apikey_auth_duration_seconds_bucket[5m])) by (le))
+    unit: "s"
+    y_axis:
+      max: 0.1
+
+# Alert rules
+alert_rules:
+  high_scope_denial_rate:
+    alert: "HighScopeDenialRate"
+    expr: |
+      sum(rate(apikey_scope_denied_total[5m])) 
+      / sum(rate(apikey_auth_total[5m])) > 0.005
+    for: "2m"
+    labels:
+      severity: "warning"
+      component: "api-keys"
+    annotations:
+      summary: "High API key scope denial rate"
+      description: "Scope denial rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+  rate_limit_spike:
+    alert: "RateLimitSpike"
+    expr: |
+      rate(apikey_rate_limited_total[5m]) > 5 * rate(apikey_rate_limited_total[1h])
+    for: "1m"
+    labels:
+      severity: "critical"
+      component: "api-keys"
+    annotations:
+      summary: "API key rate limiting spike detected"
+      description: "Rate limiting is {{ $value }}x higher than baseline"
+
+  auth_failure_spike:
+    alert: "AuthFailureSpike"
+    expr: |
+      sum(rate(apikey_invalid_total[5m])) > 10
+    for: "2m"
+    labels:
+      severity: "warning"
+      component: "api-keys"
+    annotations:
+      summary: "High API key authentication failure rate"
+      description: "{{ $value }} invalid key attempts per second"
+
+# Log parsing rules (for log aggregation systems)
+log_parsing:
+  security_events:
+    pattern: |
+      ^\[(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\] 
+      \[(?P<logger>\w+)\] 
+      (?P<event>\w+) 
+      (?P<data>.*)$
+    
+    fields:
+      timestamp: "datetime"
+      logger: "string"
+      event: "string"
+      data: "json"
+
+# SLO definitions
+slo_definitions:
+  api_key_authentication:
+    name: "API Key Authentication Availability"
+    description: "Percentage of API key authentications that succeed"
+    target: 99.9
+    measurement: |
+      sum(rate(apikey_auth_total{status="success"}[5m])) 
+      / sum(rate(apikey_auth_total[5m]))
+    
+  api_key_response_time:
+    name: "API Key Authentication Response Time"
+    description: "95th percentile response time for API key authentication"
+    target: 0.01  # 10ms
+    measurement: |
+      histogram_quantile(0.95, sum(rate(apikey_auth_duration_seconds_bucket[5m])) by (le))

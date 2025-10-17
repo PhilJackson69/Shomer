@@ -1,0 +1,29 @@
+name: Nightly Maintenance
+on:
+  schedule:
+    - cron: "17 10 * * *" # 03:17 PT / 10:17 UTC
+  workflow_dispatch: {}
+
+jobs:
+  maint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - run: pnpm i --frozen-lockfile
+      - name: Env
+        run: |
+          echo "RETENTION_RAW_DAYS=${{ secrets.RETENTION_RAW_DAYS || 90 }}" >> $GITHUB_ENV
+          echo "RETENTION_SIGNAL_DAYS=${{ secrets.RETENTION_SIGNAL_DAYS || 365 }}" >> $GITHUB_ENV
+          echo "RETENTION_ALERT_DAYS=${{ secrets.RETENTION_ALERT_DAYS || 365 }}" >> $GITHUB_ENV
+          echo "RETENTION_DRY_RUN=${{ secrets.RETENTION_DRY_RUN || 'false' }}" >> $GITHUB_ENV
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> $GITHUB_ENV
+      - name: Run maintenance
+        run: pnpm maint:nightly
+
+

@@ -1,0 +1,61 @@
+version: '1.0'
+settings:
+  risk_threshold: 50.0
+  rate_limit_per_minute: 60
+  worker_timeout: 300
+  max_posts_per_feed: 100
+feeds:
+  rss:
+    enabled: true
+    sources:
+      - name: bbc_world
+        url: http://feeds.bbci.co.uk/news/world/rss.xml
+        enabled: false
+      - name: cnn_world
+        url: http://rss.cnn.com/rss/cnn_world.rss
+        enabled: false
+      - name: reuters_world
+        url: https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best
+        enabled: false
+  reddit:
+    enabled: true
+    sources:
+      - name: worldnews
+        subreddit: worldnews
+        search_query: null
+        enabled: false
+      - name: news
+        subreddit: news
+        search_query: null
+        enabled: false
+      - name: local_news
+        subreddit: LocalNews
+        search_query: "emergency OR threat OR incident"
+        enabled: false
+  twitter:
+    enabled: true
+    sources:
+      - name: local_news_twitter
+        username: "localnews"
+        enabled: false
+      - name: community_safety_hashtag
+        hashtag: "CommunitySafety"
+        enabled: false
+      - name: emergency_search
+        search_query: "emergency OR threat OR incident"
+        enabled: false
+  google_alerts:
+    enabled: true
+    sources:
+      - name: community_safety_alerts
+        rss_url: "https://www.google.com/alerts/feeds/12345678901234567890/12345678901234567890"
+        search_terms: ["community safety", "threat", "emergency"]
+        enabled: false
+      - name: local_incidents
+        rss_url: "https://www.google.com/alerts/feeds/09876543210987654321/09876543210987654321"
+        search_terms: ["local incident", "police", "emergency response"]
+        enabled: false
+  web:
+    enabled: false
+    sources: []
+

@@ -1,0 +1,31 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "no-restricted-imports": ["error", {
+      "paths": [
+        { "name": "ioredis", "message": "Import from '@/lib/cache' or '@/lib/redis' only." },
+        { "name": "@/lib/api-client", "message": "Use '@/lib/apiFetch' only." }
+      ],
+      "patterns": ["**/ioredis"]
+    }],
+    "no-restricted-globals": ["error", { 
+      "name": "fetch", 
+      "message": "Use apiFetch for internal API calls or externalFetch for external APIs only. Raw fetch() is banned to enforce CSRF rotation, credentials, and idempotency." 
+    }]
+  },
+  "overrides": [
+    {
+      "files": ["src/lib/redis.ts"],
+      "rules": { "no-restricted-imports": "off" }
+    },
+    {
+      "files": ["src/lib/api-client.ts", "src/lib/external-fetch.ts", "src/lib/apiFetch.ts"],
+      "rules": { "no-restricted-globals": "off" }
+    },
+    {
+      "files": ["src/app/api/**/route.ts", "src/server/**"],
+      "rules": { "no-restricted-globals": "off" }
+    }
+  ]
+}
+

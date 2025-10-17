@@ -1,0 +1,227 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "API Key Hardening - Production Monitoring",
+    "description": "SOC 2 compliant monitoring dashboard for API key scopes and rate limiting",
+    "tags": ["api-keys", "security", "compliance"],
+    "layout_type": "ordered",
+    "is_read_only": false,
+    "notify_list": ["platform-ops@company.com"],
+    "reflow_type": "fixed",
+    "widgets": [
+      {
+        "id": 1,
+        "definition": {
+          "title": "API Key Authentication Success Rate",
+          "title_size": "16",
+          "title_align": "left",
+          "type": "query_value",
+          "requests": [
+            {
+              "q": "sum:apikey_auth_total{env:prod}.as_count()",
+              "aggregator": "last"
+            }
+          ],
+          "autoscale": true,
+          "precision": 2,
+          "custom_unit": "%"
+        },
+        "layout": {
+          "x": 0,
+          "y": 0,
+          "width": 47,
+          "height": 15
+        }
+      },
+      {
+        "id": 2,
+        "definition": {
+          "title": "Scope Denial Rate (Target: <1%)",
+          "title_size": "16",
+          "title_align": "left",
+          "type": "query_value",
+          "requests": [
+            {
+              "q": "sum:apikey_scope_denied_total{env:prod}.as_count() / sum:apikey_auth_total{env:prod}.as_count() * 100",
+              "aggregator": "last"
+            }
+          ],
+          "autoscale": true,
+          "precision": 2,
+          "custom_unit": "%",
+          "alert_id": "scope_denial_rate_alert"
+        },
+        "layout": {
+          "x": 47,
+          "y": 0,
+          "width": 47,
+          "height": 15
+        }
+      },
+      {
+        "id": 3,
+        "definition": {
+          "title": "Rate Limited Requests",
+          "title_size": "16",
+          "title_align": "left",
+          "type": "query_value",
+          "requests": [
+            {
+              "q": "sum:apikey_rate_limited_total{env:prod}.as_count()",
+              "aggregator": "last"
+            }
+          ],
+          "autoscale": true,
+          "precision": 0,
+          "custom_unit": "requests"
+        },
+        "layout": {
+          "x": 94,
+          "y": 0,
+          "width": 47,
+          "height": 15
+        }
+      },
+      {
+        "id": 4,
+        "definition": {
+          "title": "API Key Auth Events (Last 24h)",
+          "title_size": "16",
+          "title_align": "left",
+          "type": "timeseries",
+          "requests": [
+            {
+              "q": "sum:apikey_auth_total{env:prod}.as_count().rollup(sum, 300)",
+              "display_type": "line"
+            },
+            {
+              "q": "sum:apikey_scope_denied_total{env:prod}.as_count().rollup(sum, 300)",
+              "display_type": "line"
+            },
+            {
+              "q": "sum:apikey_rate_limited_total{env:prod}.as_count().rollup(sum, 300)",
+              "display_type": "line"
+            }
+          ],
+          "yaxis": {
+            "label": "Events",
+            "scale": "linear"
+          },
+          "legend": {
+            "type": "automatic"
+          }
+        },
+        "layout": {
+          "x": 0,
+          "y": 15,
+          "width": 47,
+          "height": 15
+        }
+      },
+      {
+        "id": 5,
+        "definition": {
+          "title": "Top Denied Scopes",
+          "title_size": "16",
+          "title_align": "left",
+          "type": "toplist",
+          "requests": [
+            {
+              "q": "top(sum:apikey_scope_denied_total{env:prod} by {scope}.as_count(), 10, 'sum', 'desc')"
+            }
+          ]
+        },
+        "layout": {
+          "x": 47,
+          "y": 15,
+          "width": 47,
+          "height": 15
+        }
+      },
+      {
+        "id": 6,
+        "definition": {
+          "title": "Rate Limit Bucket Status",
+          "title_size": "16",
+          "title_align": "left",
+          "type": "heatmap",
+          "requests": [
+            {
+              "q": "sum:apikey_rate_bucket_remaining{env:prod} by {key_id}",
+              "style": {
+                "palette": "dog_classic"
+              }
+            }
+          ]
+        },
+        "layout": {
+          "x": 94,
+          "y": 15,
+          "width": 47,
+          "height": 15
+        }
+      },
+      {
+        "id": 7,
+        "definition": {
+          "title": "Security Events Log",
+          "title_size": "16",
+          "title_align": "left",
+          "type": "log_stream",
+          "query": "source:application env:prod (event:apikey.auth OR event:apikey.scope_denied OR event:apikey.rate_limited)",
+          "columns": ["timestamp", "level", "message"],
+          "show_date_column": true,
+          "show_message_column": true,
+          "message_display": "expanded-md"
+        },
+        "layout": {
+          "x": 0,
+          "y": 30,
+          "width": 141,
+          "height": 20
+        }
+      }
+    ],
+    "template_variables": [
+      {
+        "name": "env",
+        "prefix": "env",
+        "available_values": ["prod", "staging", "dev"],
+        "default": "prod"
+      },
+      {
+        "name": "time_range",
+        "prefix": "time",
+        "available_values": ["1h", "4h", "24h", "7d"],
+        "default": "24h"
+      }
+    ]
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "created_by": "platform-engineering",
+    "created_at": "2025-01-01T00:00:00Z",
+    "last_updated": "2025-01-01T00:00:00Z",
+    "compliance": {
+      "soc2_type_ii": true,
+      "iso_27001": true,
+      "audit_trail": true
+    },
+    "alert_configs": [
+      {
+        "name": "scope_denial_rate_alert",
+        "query": "sum:apikey_scope_denied_total{env:prod}.as_count() / sum:apikey_auth_total{env:prod}.as_count() > 0.01",
+        "threshold": 1.0,
+        "message": "API Key scope denial rate exceeded 1% threshold",
+        "escalation": ["platform-ops@company.com", "security@company.com"]
+      },
+      {
+        "name": "rate_limit_surge_alert",
+        "query": "sum:apikey_rate_limited_total{env:prod}.as_count() > 100",
+        "threshold": 100,
+        "message": "API Key rate limiting surge detected",
+        "escalation": ["platform-ops@company.com"]
+      }
+    ]
+  }
+}

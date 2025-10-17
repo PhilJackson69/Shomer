@@ -1,0 +1,207 @@
+name: Security Scan & SBOM Generation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  sbom-and-scan:
+    name: Generate SBOMs & Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ========================================================================
+      # Python/API Security Scanning
+      # ========================================================================
+      
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Scan Python dependencies
+        working-directory: apps/api
+        run: |
+          pip install -r requirements.txt || pip install poetry && poetry export -f requirements.txt --output requirements.txt
+          pip-audit --requirement requirements.txt --vulnerability-service osv --format json --output pip-audit-report.json || true
+          pip-audit --requirement requirements.txt --vulnerability-service osv --fail-on high
+
+      - name: Upload pip-audit report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: pip-audit-report
+          path: apps/api/pip-audit-report.json
+
+      # ========================================================================
+      # Node/Web Security Scanning
+      # ========================================================================
+
+      - name: Install dependencies (web)
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Run npm audit (production only)
+        working-directory: apps/web
+        run: |
+          npm audit --omit=dev --audit-level=high --json > npm-audit-report.json || true
+          npm audit --omit=dev --audit-level=high
+
+      - name: Upload npm audit report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: npm-audit-report
+          path: apps/web/npm-audit-report.json
+
+      # ========================================================================
+      # SBOM Generation
+      # ========================================================================
+
+      - name: Install Syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Build Docker images
+        run: |
+          docker build -t shomer-api:latest ./apps/api
+          docker build -t shomer-web:latest ./apps/web
+
+      - name: Generate SBOM for API
+        run: |
+          syft packages shomer-api:latest -o spdx-json > sbom-api.json
+          syft packages shomer-api:latest -o cyclonedx-json > sbom-api-cyclonedx.json
+
+      - name: Generate SBOM for Web
+        run: |
+          syft packages shomer-web:latest -o spdx-json > sbom-web.json
+          syft packages shomer-web:latest -o cyclonedx-json > sbom-web-cyclonedx.json
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v3
+        with:
+          name: sboms
+          path: |
+            sbom-*.json
+
+      # ========================================================================
+      # Vulnerability Scanning with Grype
+      # ========================================================================
+
+      - name: Install Grype
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Scan API image for vulnerabilities
+        run: |
+          grype shomer-api:latest --fail-on high --output json > grype-api-report.json || true
+          grype shomer-api:latest --fail-on high
+
+      - name: Scan Web image for vulnerabilities
+        run: |
+          grype shomer-web:latest --fail-on high --output json > grype-web-report.json || true
+          grype shomer-web:latest --fail-on high
+
+      - name: Upload Grype reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: grype-reports
+          path: |
+            grype-*-report.json
+
+      # ========================================================================
+      # Image Signing (if Cosign configured)
+      # ========================================================================
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push images
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          docker tag shomer-api:latest ghcr.io/${{ github.repository_owner }}/shomer-api:latest
+          docker tag shomer-web:latest ghcr.io/${{ github.repository_owner }}/shomer-web:latest
+          docker push ghcr.io/${{ github.repository_owner }}/shomer-api:latest
+          docker push ghcr.io/${{ github.repository_owner }}/shomer-web:latest
+
+      - name: Sign images with Cosign
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          cosign sign --yes ghcr.io/${{ github.repository_owner }}/shomer-api:latest
+          cosign sign --yes ghcr.io/${{ github.repository_owner }}/shomer-web:latest
+
+      # ========================================================================
+      # Summary Report
+      # ========================================================================
+
+      - name: Generate security summary
+        if: always()
+        run: |
+          cat > security-summary.md << 'EOF'
+          # Security Scan Summary
+          
+          **Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Commit:** ${{ github.sha }}
+          **Branch:** ${{ github.ref_name }}
+          
+          ## Vulnerability Scans
+          
+          ### Python Dependencies (pip-audit)
+          See `pip-audit-report.json` for details.
+          
+          ### Node.js Dependencies (npm audit)
+          See `npm-audit-report.json` for details.
+          
+          ### Container Images (Grype)
+          - API Image: See `grype-api-report.json`
+          - Web Image: See `grype-web-report.json`
+          
+          ## Software Bill of Materials (SBOM)
+          
+          - API (SPDX): `sbom-api.json`
+          - API (CycloneDX): `sbom-api-cyclonedx.json`
+          - Web (SPDX): `sbom-web.json`
+          - Web (CycloneDX): `sbom-web-cyclonedx.json`
+          
+          ## Image Signing
+          
+          Images signed with Cosign (keyless, OIDC).
+          Verify with: `cosign verify ghcr.io/${{ github.repository_owner }}/shomer-api:latest`
+          EOF
+          
+          cat security-summary.md
+
+      - name: Upload security summary
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-summary
+          path: security-summary.md
+

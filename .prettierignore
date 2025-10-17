@@ -1,0 +1,15 @@
+node_modules
+.next
+dist
+build
+coverage
+*.lock
+pnpm-lock.yaml
+package-lock.json
+.DS_Store
+*.pyc
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+

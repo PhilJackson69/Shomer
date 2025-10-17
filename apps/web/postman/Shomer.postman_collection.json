@@ -1,0 +1,25 @@
+{
+  "info": { "name": "Shomer", "_postman_id": "shomer-collection", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "item": [
+    { "name": "Health", "request": { "method": "GET", "url": "{{baseUrl}}/api/health" } },
+    { "name": "List Alerts", "request": { "method": "GET", "url": "{{baseUrl}}/api/alerts?limit=10" } },
+    { "name": "CSV Export", "request": { "method": "GET", "url": "{{baseUrl}}/api/alerts/export?sinceHours=168" } },
+    { "name": "Verify Alert", "request": { "method": "POST", "url": "{{baseUrl}}/api/alerts/{{alertId}}/verify" } },
+    { "name": "Dismiss Alert", "request": { "method": "POST", "url": "{{baseUrl}}/api/alerts/{{alertId}}/dismiss" } },
+    { "name": "Bulk Verify", "request": { "method": "POST", "header": [{ "key": "content-type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{ \"ids\": [\"{{alertId}}\"] }" }, "url": "{{baseUrl}}/api/alerts/bulk/verify" } },
+    { "name": "Bulk Dismiss", "request": { "method": "POST", "header": [{ "key": "content-type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{ \"ids\": [\"{{alertId}}\"] }" }, "url": "{{baseUrl}}/api/alerts/bulk/dismiss" } },
+    { "name": "SSE Events", "request": { "method": "GET", "url": "{{baseUrl}}/api/events" } },
+    { "name": "Scan (mock)", "request": { "method": "POST", "header": [{ "key": "content-type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{ \"posts\": [{ \"title\": \"test\", \"text\": \"attack synagogue tonight\", \"region\": \"SF-Bay-Area\", \"topic\": \"synagogue\", \"source\": { \"kind\": \"mock\", \"externalId\": \"p-1\", \"url\": \"https://x.com/1\" } }] }" }, "url": "{{baseUrl}}/api/scan" } },
+    { "name": "Collector RSS", "request": { "method": "POST", "header": [{ "key": "content-type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{apiKey}}" }, { "key": "x-cron-secret", "value": "{{cronSecret}}" }, { "key": "x-shomer-timestamp", "value": "{{timestamp}}" }, { "key": "x-shomer-signature", "value": "{{ingestSignature}}" }], "body": { "mode": "raw", "raw": "{ \"feedUrl\": \"https://news.google.com/rss/search?q=synagogue\", \"region\": \"SF-Bay-Area\", \"topic\": \"news\" }" }, "url": "{{baseUrl}}/api/collect/rss" } }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "alertId", "value": "" },
+    { "key": "apiKey", "value": "" },
+    { "key": "cronSecret", "value": "" },
+    { "key": "timestamp", "value": "" },
+    { "key": "ingestSignature", "value": "" }
+  ]
+}
+
+

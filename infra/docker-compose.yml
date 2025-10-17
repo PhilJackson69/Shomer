@@ -1,0 +1,215 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: shomer-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-shomer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shomer_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-shomer}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-shomer}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shomer-network
+
+  # Redis Cache & Queue
+  redis:
+    image: redis:7-alpine
+    container_name: shomer-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - shomer-network
+
+  # MinIO (S3-compatible storage for dev)
+  minio:
+    image: minio/minio:latest
+    container_name: shomer-minio
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - shomer-network
+
+  # FastAPI Backend
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    container_name: shomer-api
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      POSTGRES_USER: ${POSTGRES_USER:-shomer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shomer_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-shomer}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-shomer}:${POSTGRES_PASSWORD:-shomer_dev_password}@db:5432/${POSTGRES_DB:-shomer}
+      
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      
+      # JWT
+      API_SECRET_KEY: ${API_SECRET_KEY:-dev-secret-key-change-in-production}
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRES_IN: 3600
+      
+      # Storage (MinIO for dev)
+      STORAGE_TYPE: s3
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-shomer-uploads}
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_REGION: us-east-1
+      
+      # Retention
+      TIP_RETENTION_DAYS: ${TIP_RETENTION_DAYS:-14}
+      ENABLE_RETENTION_SCHEDULER: ${ENABLE_RETENTION_SCHEDULER:-true}
+      
+      # Environment
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      
+      # Alert Services (optional)
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+    volumes:
+      - ../apps/api:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        python -c 'import time; time.sleep(5)' &&
+        echo 'Running migrations...' &&
+        alembic upgrade head &&
+        echo 'Seeding database...' &&
+        python seed.py &&
+        echo 'Starting API server...' &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - shomer-network
+
+  # Ingestion Worker (RQ)
+  worker:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    container_name: shomer-worker
+    environment:
+      # Database
+      POSTGRES_USER: ${POSTGRES_USER:-shomer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shomer_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-shomer}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-shomer}:${POSTGRES_PASSWORD:-shomer_dev_password}@db:5432/${POSTGRES_DB:-shomer}
+      
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      
+      # JWT
+      API_SECRET_KEY: ${API_SECRET_KEY:-dev-secret-key-change-in-production}
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      
+      # Storage
+      STORAGE_TYPE: s3
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-shomer-uploads}
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_REGION: us-east-1
+      
+      # Environment
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    volumes:
+      - ../apps/api:/app
+    depends_on:
+      - db
+      - redis
+      - api
+    command: >
+      sh -c "
+        echo 'Starting ingestion worker...' &&
+        rq worker --url redis://redis:6379/0
+      "
+    networks:
+      - shomer-network
+
+  # Next.js Frontend
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+      target: development
+    container_name: shomer-web
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WEB_URL: http://localhost:3000
+    volumes:
+      - ../apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api
+    command: npm run dev
+    networks:
+      - shomer-network
+
+networks:
+  shomer-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+

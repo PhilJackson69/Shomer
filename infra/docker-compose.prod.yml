@@ -1,0 +1,67 @@
+# Production overrides for docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+version: '3.8'
+
+services:
+  db:
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # Required in production
+    volumes:
+      - /var/lib/postgresql/data:/var/lib/postgresql/data
+
+  redis:
+    restart: always
+    volumes:
+      - /var/lib/redis/data:/data
+
+  # Remove MinIO in production (use real S3)
+  minio:
+    profiles:
+      - dev-only
+
+  api:
+    build:
+      target: production
+    restart: always
+    environment:
+      ENVIRONMENT: production
+      # Use real S3
+      STORAGE_TYPE: s3
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      # Remove AWS_ENDPOINT_URL to use real S3
+    volumes: []  # No volume mounts in production
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+      "
+
+  worker:
+    build:
+      target: production
+    restart: always
+    environment:
+      ENVIRONMENT: production
+      STORAGE_TYPE: s3
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    volumes: []
+
+  web:
+    build:
+      target: production
+    restart: always
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL}
+    volumes: []
+    command: node server.js
+

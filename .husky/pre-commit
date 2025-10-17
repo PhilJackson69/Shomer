@@ -1,0 +1,5 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+bash scripts/check-no-raw-fetch.sh || exit 1
+pnpm -w eslint apps/web/src --ext .ts,.tsx --max-warnings=0 || exit 1
