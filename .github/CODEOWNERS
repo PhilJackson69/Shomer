@@ -1,25 +1,16 @@
-# Code owners for Shomer project
-# These users will be automatically requested for review when PRs modify these files
+# Global owners (fallback)
+*                                               @PhilJackson69
 
-# Default owners for everything
-*                                   @shomer-team
+# Critical apps
+/apps/api/                                      @PhilJackson69
+/apps/web/                                      @PhilJackson69
 
-# API code
-/apps/api/                          @shomer-backend-team
+# Workflows & security-sensitive
+/.github/workflows/                             @PhilJackson69
+/infra/                                         @PhilJackson69
+Dockerfile                                      @PhilJackson69
+**/*.yml                                        @PhilJackson69
 
-# Web app code
-/apps/web/                          @shomer-frontend-team
-
-# Infrastructure
-/infra/                             @shomer-devops-team
-/docker-compose.yml                 @shomer-devops-team
-/.github/workflows/                 @shomer-devops-team
-
-# Security and governance docs
-/docs/SECURITY.md                   @shomer-security-team
-/docs/PRIVACY.md                    @shomer-legal-team
-/docs/GOVERNANCE.md                 @shomer-compliance-team
-
-# Architecture decisions
-/docs/adr/                          @shomer-architecture-team
-
+# Docs & site
+/docs/                                          @PhilJackson69
+/apps/web/src/app/(legal)/                      @PhilJackson69

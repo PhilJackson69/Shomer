@@ -1,0 +1,33 @@
+name: Release Artifacts
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write  # required to upload assets to the release
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p releases/artifacts || true
+          # If you generate artifacts in CI, do it here.
+          # Example placeholders (remove if not needed):
+          # echo "{}" > releases/artifacts/grafana-api-security-dashboard.json
+          # echo "groups: []" > releases/artifacts/prometheus_rules_api_security.yaml
+          # echo "alerts: []" > releases/artifacts/prometheus_alerts_api_slo.yaml
+          # echo "# snippets" > releases/artifacts/alertmanager_config_snippets.yaml
+
+      - name: Upload artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            releases/artifacts/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
