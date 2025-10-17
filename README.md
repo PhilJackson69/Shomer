@@ -1,12 +1,37 @@
-# Shomer
+# 🛡️ Shomer
+**AI-Driven Guardian for Communities**
 
-> Production-ready monorepo for content triage with enterprise-grade security, RBAC, and comprehensive auditing.
+Shomer (“שומר”, Hebrew for *guardian*) is an AI-powered security and coordination platform designed to help communities, organizations, and response teams detect, manage, and respond to digital or physical threats safely and efficiently.
 
-[![CI](https://github.com/your-org/shomer/workflows/CI/badge.svg)](https://github.com/your-org/shomer/actions)
-[![Security](https://github.com/your-org/shomer/workflows/Security/badge.svg)](https://github.com/your-org/shomer/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+It combines advanced automation with strong privacy and enterprise-grade security to ensure that protection never comes at the cost of trust.
 
-## Overview
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/PhilJackson69/Shomer/issues)
+
+## 🌍 Mission
+To protect and empower communities through ethical AI, resilient infrastructure, and transparent oversight.
+
+## ⚙️ Core Capabilities
+- **Real-Time Protection:** Automated triage and escalation of critical alerts
+- **Enterprise Security:** Built-in CSRF rotation, idempotency keys, RBAC, and full audit logging
+- **Human Oversight:** Role-based review and governance for every action
+- **Observability:** Complete Prometheus-backed monitoring and Grafana dashboards
+- **Resilience:** Self-healing degraded-mode system for uninterrupted protection
+
+---
+
+## 🧠 Technical Overview
+- Backend: FastAPI (Python 3.11), SQLAlchemy 2.0, Alembic, Pydantic, JWT
+- Frontend: Next.js (React 18), TypeScript, Tailwind CSS, shadcn/ui
+- Data: PostgreSQL (primary), Redis (cache/queue), MinIO (S3-compatible)
+- Infra/Dev: Docker Compose, Makefile, GitHub Actions CI/CD, Terraform skeleton
+- Monitoring: Prometheus metrics + recording/alert rules, Grafana dashboards
+- Packages: pnpm workspaces, shared TypeScript client
+- Tooling: uv (Python), ESLint/Prettier/ruff/mypy/black/isort
+
+---
+
+## 📦 Overview
 
 Shomer is a production-ready monorepo featuring:
 
@@ -18,20 +43,22 @@ Shomer is a production-ready monorepo featuring:
 - **CI/CD**: GitHub Actions for testing, linting, and deployment
 - **Compliance**: GDPR-ready with comprehensive security and privacy policies
 
-## Table of Contents
+## 📚 Table of Contents
 
-- [Quick Start](#quick-start)
-- [Developer Mode](#developer-mode)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Configuration](#configuration)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Security](#security)
-- [Contributing](#contributing)
-- [License](#license)
+- [🚀 Quick Start](#-quick-start)
+- [🧑‍💻 Developer Mode](#-developer-mode)
+- [🏗️ Architecture](#-architecture)
+- [🧩 Project Structure](#-project-structure)
+- [⚙️ Configuration](#-configuration)
+- [🧪 Testing](#-testing)
+- [🚀 Deployment](#-deployment)
+- [🔐 Security](#-security)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
 
-## Quick Start
+---
+
+## 🚀 Quick Start
 
 Get Shomer running in under 5 minutes with Docker.
 
@@ -43,7 +70,7 @@ Get Shomer running in under 5 minutes with Docker.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/shomer.git
+git clone https://github.com/PhilJackson69/Shomer.git
 cd shomer
 ```
 
@@ -94,7 +121,9 @@ Additional test accounts:
 
 ⚠️ **Change these credentials immediately in production!**
 
-## Developer Mode
+---
+
+## 🧑‍💻 Developer Mode
 
 For active development without Docker.
 
@@ -191,7 +220,9 @@ make clean
 make help
 ```
 
-## Architecture
+---
+
+## 🏗️ Architecture
 
 Shomer follows a modern monorepo architecture with clear separation of concerns.
 
@@ -224,7 +255,9 @@ See [Architecture Decision Records (ADRs)](./docs/adr/) for detailed rationale:
 - [ADR-004: PostgreSQL Database](./docs/adr/004-postgresql-database.md)
 - [ADR-005: RBAC Model](./docs/adr/005-rbac-model.md)
 
-## Project Structure
+---
+
+## 🧩 Project Structure
 
 ```
 shomer/
@@ -279,7 +312,9 @@ shomer/
 └── README.md                    # This file
 ```
 
-## Configuration
+---
+
+## ⚙️ Configuration
 
 ### Environment Variables
 
@@ -463,7 +498,9 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 openssl rand -base64 32
 ```
 
-## Testing
+---
+
+## 🧪 Testing
 
 ### Run All Tests
 
@@ -515,7 +552,9 @@ make test-integration
 docker compose -f docker-compose.test.yml down
 ```
 
-## Deployment
+---
+
+## 🚀 Deployment
 
 ### Docker Deployment
 
@@ -540,12 +579,12 @@ This triggers the Docker workflow which:
 
 ```bash
 # Pull from GHCR
-docker pull ghcr.io/your-org/shomer/api:latest
-docker pull ghcr.io/your-org/shomer/web:latest
+docker pull ghcr.io/PhilJackson69/shomer/api:latest
+docker pull ghcr.io/PhilJackson69/shomer/web:latest
 
 # Or specific version
-docker pull ghcr.io/your-org/shomer/api:v1.0.0
-docker pull ghcr.io/your-org/shomer/web:v1.0.0
+docker pull ghcr.io/PhilJackson69/shomer/api:v1.0.0
+docker pull ghcr.io/PhilJackson69/shomer/web:v1.0.0
 ```
 
 #### Required Secrets
@@ -600,7 +639,9 @@ See [Infrastructure Documentation](./infra/) for:
 - [ ] Review security policy
 - [ ] Set up error tracking (Sentry, etc.)
 
-## Security
+---
+
+## 🔐 Security
 
 ### Reporting Security Issues
 
@@ -637,7 +678,9 @@ We will respond within 24 hours.
 | Moderator | View users, view audit logs, manage users             |
 | Admin     | Full access, modify settings, change roles            |
 
-## Contributing
+---
+
+## 🤝 Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
@@ -673,7 +716,9 @@ To run manually:
 pre-commit run --all-files
 ```
 
-## FAQ
+---
+
+## 🙋 FAQ
 
 ### How do I reset the database?
 
@@ -708,7 +753,9 @@ cd packages/shared
 pnpm generate
 ```
 
-## Public Read-Only Status
+---
+
+## 🌐 Public Read-Only Status
 
 Shomer provides public, read-only access to on-call rota information via organization share tokens.
 
@@ -877,7 +924,9 @@ GET /api/public/oncall/badge.svg?token=<shareToken>&theme=light|dark
 - Widget supports multiple instances on the same page
 - Public access is rate-limited to prevent abuse
 
-## Copy Week → Next Week
+---
+
+## 🔁 Copy Week → Next Week
 
 Clone a 7-day rota window forward by N weeks (overlap-safe).
 
@@ -928,7 +977,9 @@ curl -sS -X POST \
 
 ---
 
-## Shift Swaps
+---
+
+## 🔄 Shift Swaps
 
 Request to reassign a shift to another user, with admin approval.
 
@@ -1109,23 +1160,39 @@ const expected = "sha256=" + crypto.createHmac("sha256", secret).update(rawBody)
 * * * * *  curl -fsS -X POST http://localhost:3000/api/notifications/deliver >/dev/null
 ```
 
-## License
+---
+
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+---
+
+## 🙌 Acknowledgments
 
 - Built with [FastAPI](https://fastapi.tiangolo.com/)
 - Frontend powered by [Next.js](https://nextjs.org/)
 - UI components from [shadcn/ui](https://ui.shadcn.com/)
 - Icons by [Lucide](https://lucide.dev/)
 
-## Support
+---
+
+## 🧭 Support
 
 - **Documentation**: [docs/](./docs/)
-- **Issues**: [GitHub Issues](https://github.com/your-org/shomer/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/shomer/discussions)
+- **Issues**: [GitHub Issues](https://github.com/PhilJackson69/Shomer/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/PhilJackson69/Shomer/discussions)
 - **Email**: support@shomer.local
+
+---
+
+## 🤝 Community & Contribution
+
+Shomer is an open initiative dedicated to safer digital and physical spaces.  
+Contributions, feedback, and security audits are welcome.
+
+📧 Contact: support@shomer.local  
+🧭 Learn more: [Documentation](./docs) · [Issues](https://github.com/PhilJackson69/Shomer/issues) · [Discussions](https://github.com/PhilJackson69/Shomer/discussions)
 
 ---
 
