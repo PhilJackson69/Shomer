@@ -1,0 +1,27 @@
+version: v1
+metadata:
+  name: "Shomer Security Scan"
+  description: "Custom security scanning configuration for Shomer application"
+scanners:
+  vuln:
+    enabled: true
+    severity: ["CRITICAL", "HIGH", "MEDIUM"]
+    ignore-unfixed: false
+  secret:
+    enabled: true
+    severity: ["CRITICAL", "HIGH", "MEDIUM"]
+  license:
+    enabled: true
+    severity: ["CRITICAL", "HIGH"]
+  misconfig:
+    enabled: true
+    severity: ["CRITICAL", "HIGH", "MEDIUM"]
+vulnerabilities:
+  ignore:
+    - id: CVE-2023-12345
+      reason: "False positive for our use case"
+      expires: "2024-12-31"
+  exceptions:
+    - id: CVE-2023-67890
+      reason: "Mitigated by our security controls"
+      expires: "2024-12-31"

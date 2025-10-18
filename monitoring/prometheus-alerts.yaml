@@ -1,0 +1,247 @@
+# Shomer Production Security Alerts
+# Prometheus alerting rules for production deployment
+
+groups:
+  - name: shomer-security-alerts
+    rules:
+      # JWT Security Alerts
+      - alert: JWTVerifyErrorRateHigh
+        expr: |
+          sum(rate(app_auth_jwt_verify_errors_total[5m])) 
+          / clamp_min(sum(rate(app_auth_jwt_verify_attempts_total[5m])),1) * 100 > 2
+        for: 2m
+        labels:
+          severity: warning
+          category: authentication
+        annotations:
+          summary: "JWT verification error rate is high"
+          description: "JWT verification error rate is {{ $value }}%, which exceeds the 2% threshold. This may indicate key rotation issues or algorithm confusion attacks."
+
+      - alert: JWKSLatencyHigh
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_server_request_duration_seconds_bucket{route="/.well-known/jwks.json"}[5m])) by (le)
+          ) * 1000 > 300
+        for: 3m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "JWKS endpoint latency is high"
+          description: "JWKS endpoint 95th percentile latency is {{ $value }}ms, which exceeds the 300ms threshold. This may indicate caching issues or key rotation problems."
+
+      # Refresh Token Security
+      - alert: RefreshTokenReuseDetected
+        expr: |
+          sum(increase(app_auth_refresh_reuse_detected_total[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "Refresh token reuse detected"
+          description: "{{ $value }} refresh token reuse attempts detected. This indicates a potential security breach. Immediate investigation required."
+
+      # CSRF Protection
+      - alert: CSRFMismatchHigh
+        expr: |
+          sum(increase(app_csrf_mismatch_total[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High number of CSRF token mismatches"
+          description: "{{ $value }} CSRF token mismatches detected in the last 5 minutes. This may indicate CSRF attacks or token synchronization issues."
+
+      # Rate Limiting
+      - alert: RateLimitViolationsHigh
+        expr: |
+          sum(increase(app_rate_limit_violations_total[5m])) > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High rate limit violations"
+          description: "{{ $value }} rate limit violations detected in the last 5 minutes. This may indicate automated attacks or misconfigured clients."
+
+      # File Upload Security
+      - alert: FileUploadViolations
+        expr: |
+          sum(increase(app_file_upload_violations_total[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "File upload security violations detected"
+          description: "{{ $value }} file upload security violations detected. This may indicate malicious file upload attempts."
+
+      # SSRF Protection
+      - alert: SSRFAttemptsHigh
+        expr: |
+          sum(increase(app_ssrf_attempts_blocked_total[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High number of SSRF attempts"
+          description: "{{ $value }} SSRF attempts blocked in the last 5 minutes. This may indicate active SSRF attacks."
+
+      # Infrastructure Alerts
+      - alert: HTTP5xxErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{status=~"5.."}[5m])) 
+          / sum(rate(http_server_requests_total[5m])) * 100 > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High HTTP 5xx error rate"
+          description: "HTTP 5xx error rate is {{ $value }}%, which exceeds the 1% threshold."
+
+      - alert: DatabaseConnectionPoolHigh
+        expr: |
+          (app_db_connections_active / app_db_connections_max) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Database connection pool utilization is high"
+          description: "Database connection pool utilization is {{ $value }}%, which exceeds the 80% threshold."
+
+      - alert: RedisConnectionDown
+        expr: |
+          up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Redis connection is down"
+          description: "Redis connection has been down for more than 1 minute. This will disable rate limiting and caching."
+
+      - alert: MemoryUsageHigh
+        expr: |
+          (app_memory_usage_bytes / app_memory_limit_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Memory usage is high"
+          description: "Memory usage is {{ $value }}%, which exceeds the 85% threshold."
+
+      - alert: CPUUsageHigh
+        expr: |
+          rate(app_cpu_usage_seconds_total[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "CPU usage is high"
+          description: "CPU usage is {{ $value }}%, which exceeds the 80% threshold."
+
+      - alert: DiskUsageHigh
+        expr: |
+          (app_disk_usage_bytes / app_disk_total_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Disk usage is high"
+          description: "Disk usage is {{ $value }}%, which exceeds the 85% threshold."
+
+      # Security Events
+      - alert: SecurityEventRateHigh
+        expr: |
+          sum(rate(app_security_events_total[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High security event rate"
+          description: "Security event rate is {{ $value }} events per second, which exceeds the normal threshold."
+
+      - alert: AuditLogWriteFailure
+        expr: |
+          sum(rate(app_audit_logs_write_failures_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "Audit log write failures"
+          description: "{{ $value }} audit log write failures detected. This compromises security compliance."
+
+      # API Performance
+      - alert: APIResponseTimeHigh
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_server_request_duration_seconds_bucket{route=~"/api/.*"}[5m])) by (le)
+          ) * 1000 > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "API response time is high"
+          description: "API 95th percentile response time is {{ $value }}ms, which exceeds the 1000ms threshold."
+
+  - name: shomer-canary-deployment
+    rules:
+      # Canary Deployment Alerts
+      - alert: CanaryJWTErrorRateElevated
+        expr: |
+          sum(rate(app_auth_jwt_verify_errors_total{instance=~".*canary.*"}[5m])) 
+          / clamp_min(sum(rate(app_auth_jwt_verify_attempts_total{instance=~".*canary.*"}[5m])),1) * 100 > 2
+        for: 5m
+        labels:
+          severity: critical
+          category: canary
+        annotations:
+          summary: "Canary deployment JWT error rate elevated"
+          description: "Canary deployment JWT error rate is {{ $value }}%, indicating potential issues with the new deployment."
+
+      - alert: CanaryJWKSLatencyDegraded
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_server_request_duration_seconds_bucket{route="/.well-known/jwks.json",instance=~".*canary.*"}[5m])) by (le)
+          ) * 1000 > 300
+        for: 5m
+        labels:
+          severity: critical
+          category: canary
+        annotations:
+          summary: "Canary deployment JWKS latency degraded"
+          description: "Canary deployment JWKS latency is {{ $value }}ms, indicating performance issues."
+
+      - alert: CanaryCSRFMismatchSpike
+        expr: |
+          sum(increase(app_csrf_mismatch_total{instance=~".*canary.*"}[5m])) > 5
+        for: 3m
+        labels:
+          severity: critical
+          category: canary
+        annotations:
+          summary: "Canary deployment CSRF mismatches spiking"
+          description: "Canary deployment has {{ $value }} CSRF mismatches, indicating potential CSRF protection issues."
+
+      - alert: CanaryHTTP5xxElevated
+        expr: |
+          sum(rate(http_server_requests_total{status=~"5..",instance=~".*canary.*"}[5m])) 
+          / sum(rate(http_server_requests_total{instance=~".*canary.*"}[5m])) * 100 > 1
+        for: 5m
+        labels:
+          severity: critical
+          category: canary
+        annotations:
+          summary: "Canary deployment 5xx error rate elevated"
+          description: "Canary deployment 5xx error rate is {{ $value }}%, indicating server errors in the new deployment."

@@ -1,230 +1,269 @@
 "use client";
-import { useMemo, useState, useEffect, useRef } from "react";
-import Link from "next/link";
-import SavedSearchControls from "@/components/SavedSearchControls";
-import useSWR from "swr";
-import { apiFetch } from '@/lib/apiFetch';
 
-const fetcher = (u: string) => apiFetch(u).then(r => r.json());
+import { useState, useEffect } from "react";
+import { Map, Marker, Popup } from "react-map-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 
-export default function DashboardPage() {
-  const [risk, setRisk] = useState<string>("");
-  const [onlyUnverified, setOnlyUnverified] = useState<boolean>(false);
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const timer = useRef<number | null>(null);
+interface Incident {
+  id: string;
+  type: "digital" | "physical";
+  title: string;
+  description: string;
+  severity: "low" | "medium" | "high" | "critical";
+  status: string;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  source?: string;
+  subreddit?: string;
+  author?: string;
+  url?: string;
+  score?: number;
+  created_at: string;
+  updated_at: string;
+}
 
-  const key = useMemo(() => {
-    const params = new URLSearchParams({ limit: "10" });
-    if (risk) params.set("risk", risk);
-    if (onlyUnverified) params.set("verified", "false");
-    return `/api/alerts?${params.toString()}`;
-  }, [risk, onlyUnverified]);
+const severityColors = {
+  low: "bg-green-100 text-green-800",
+  medium: "bg-yellow-100 text-yellow-800",
+  high: "bg-orange-100 text-orange-800",
+  critical: "bg-red-100 text-red-800",
+};
 
-  const { data, isLoading, mutate } = useSWR(key, fetcher, { refreshInterval: 0 });
-  const alerts = data?.alerts ?? [];
-  const selectedIds = useMemo(() => Object.keys(selected).filter(id => selected[id]), [selected]);
+export default function Dashboard() {
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
 
-  // SSE subscription for live updates
   useEffect(() => {
-    const es = new EventSource("/api/events");
-    es.onmessage = (ev) => {
-      try {
-        const data = JSON.parse(ev.data);
-        if (!data?.type) return;
-        // debounce revalidate
-        if (timer.current) window.clearTimeout(timer.current);
-        timer.current = window.setTimeout(() => mutate(), 250);
-      } catch {}
-    };
-    es.onerror = () => { /* let it reconnect automatically by browser */ };
-    return () => { es.close(); if (timer.current) window.clearTimeout(timer.current); };
-  }, [mutate]);
+    fetchIncidents();
+  }, []);
 
-  function toggleAll() {
-    const next: Record<string, boolean> = {};
-    alerts.forEach((a: any) => { next[a.id] = true; });
-    setSelected(next);
-  }
-  function clearSel() { setSelected({}); }
-
-  async function bulk(path: string, body?: any) {
-    const res = await apiFetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? { ids: selectedIds }) });
-    if (res.ok) {
-      // Show success toast
-      console.log("Bulk action saved");
-    } else {
-      console.log("Bulk action failed");
+  const fetchIncidents = async () => {
+    try {
+      const response = await fetch("/api/reports/incidents");
+      if (!response.ok) {
+        throw new Error("Failed to fetch incidents");
+      }
+      const data = await response.json();
+      setIncidents(data.incidents);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
     }
-    clearSel();
-    mutate();
+  };
+
+  const handleScanReddit = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/digital-scan/digital-scan", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          keywords: ["synagogue", "jewish", "antisemitic"],
+          limit: 20,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to scan Reddit");
+      }
+
+      const data = await response.json();
+      console.log("Reddit scan completed:", data);
+      
+      // Refresh incidents after scan
+      await fetchIncidents();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Scan failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg">Loading incidents...</div>
+      </div>
+    );
   }
 
-  function exportCSV() {
-    const rows = alerts.map((a: any) => ({
-      id: a.id, createdAt: a.createdAt, title: a.title, risk: a.risk, score: a.score, region: a.region ?? "", topic: a.topic ?? "", verified: a.verified
-    }));
-    const header = Object.keys(rows[0] ?? {id:"",createdAt:"",title:"",risk:"",score:"",region:"",topic:"",verified:""}).join(",");
-    const csv = [header, ...rows.map(r => Object.values(r).map(v => `"${String(v).replace(/"/g,'""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `alerts_${Date.now()}.csv`; a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function act(path: string) {
-    await apiFetch(path, { method: "POST" });
-    mutate();
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-red-600">Error: {error}</div>
+      </div>
+    );
   }
 
   return (
-    <main className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Shomer — Recent Alerts</h1>
-        <a href="/dashboard/map" className="text-sm underline">Map view</a>
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="py-6">
+            <div className="flex justify-between items-center">
+              <h1 className="text-3xl font-bold text-gray-900">
+                Shomer Dashboard
+              </h1>
+              <button
+                onClick={handleScanReddit}
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md disabled:opacity-50"
+              >
+                {loading ? "Scanning..." : "Scan Reddit"}
+              </button>
+            </div>
+            <p className="mt-2 text-gray-600">
+              AI-powered community safety monitoring
+            </p>
+          </div>
+        </div>
       </div>
 
-      <SavedSearchControls />
-      {selectedIds.length > 0 && (
-        <div className="mb-3 flex items-center gap-2 text-sm">
-          <span>{selectedIds.length} selected</span>
-          <button onClick={() => bulk("/api/alerts/bulk/verify", { ids: selectedIds })} className="px-3 py-1 rounded-lg bg-black text-white">Verify selected</button>
-          <button onClick={() => bulk("/api/alerts/bulk/dismiss", { ids: selectedIds })} className="px-3 py-1 rounded-lg border">Dismiss selected</button>
-          <button onClick={clearSel} className="text-xs underline">Clear</button>
-          <button
-            onClick={async () => {
-              const res = await apiFetch("/api/incidents", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ title: `Incident (${selectedIds.length} alerts)`, severity: "MEDIUM", alertIds: selectedIds })
-              });
-              if (res.ok) { console.log("Incident opened"); clearSel(); } else console.log("Failed");
-            }}
-            className="px-3 py-1 rounded-lg border text-xs">
-            Open Incident with selected
-          </button>
-        </div>
-      )}
-      <div className="mb-3 flex gap-2">
-        <button onClick={exportCSV} className="px-3 py-1 rounded-lg border text-sm">Export CSV (client)</button>
-        <a 
-          href={`/api/alerts/export?${new URLSearchParams({
-            ...(risk && { risk }),
-            ...(onlyUnverified && { verified: "false" }),
-            sinceHours: "168",
-            limit: "5000"
-          }).toString()}`}
-          className="px-3 py-1 rounded-lg border text-sm hover:bg-gray-50"
-        >
-          Export CSV (server)
-        </a>
-      </div>
-      <div className="mb-4 flex gap-3 items-center">
-        <select value={risk} onChange={(e) => setRisk(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
-          <option value="">All risks</option>
-          <option value="HIGH">HIGH</option>
-          <option value="MEDIUM">MEDIUM</option>
-          <option value="LOW">LOW</option>
-        </select>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={onlyUnverified} onChange={(e) => setOnlyUnverified(e.target.checked)} />
-          Only unverified
-        </label>
-      </div>
-      {(risk || onlyUnverified) && (
-        <div className="mb-3 text-xs rounded-lg bg-gray-50 border px-3 py-2">
-          Filters active: {risk || "All risks"} {onlyUnverified ? " • Only unverified" : ""}
-        </div>
-      )}
-      <div className="overflow-x-auto rounded-2xl shadow">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <Th>
-                <input type="checkbox" onChange={(e) => e.target.checked ? toggleAll() : clearSel()} />
-              </Th>
-              <Th>Time</Th><Th>Title</Th><Th>Risk</Th><Th>Score</Th><Th>Region</Th><Th>Topic</Th><Th>Actions</Th><Th>Link</Th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {isLoading ? (
-              <tr><td className="px-4 py-4" colSpan={8}>Loading…</td></tr>
-            ) : alerts.length === 0 ? (
-              <tr><td className="px-4 py-4" colSpan={9}>No alerts yet. Run a scan.</td></tr>
-            ) : alerts.map((a: any) => (
-              <tr key={a.id} className="hover:bg-gray-50">
-                <Td>
-                  <input
-                    type="checkbox"
-                    checked={!!selected[a.id]}
-                    onChange={(e) => setSelected(s => ({ ...s, [a.id]: e.target.checked }))}
-                  />
-                </Td>
-                <Td>{new Date(a.createdAt).toLocaleString()}</Td>
-                <Td className="font-medium">{a.title}</Td>
-                <Td>
-                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                    a.risk === "HIGH" ? "bg-red-100 text-red-800" :
-                    a.risk === "MEDIUM" ? "bg-yellow-100 text-yellow-800" :
-                    "bg-green-100 text-green-800"}`}>{a.risk}</span>
-                </Td>
-                <Td>{a.score}</Td>
-                <Td>{a.region ?? "—"}</Td>
-                <Td>{a.topic ?? "—"}</Td>
-                <Td>
-                  <div className="flex gap-2">
-                    {!a.verified && (
-                      <button
-                        onClick={() => act(`/api/alerts/${a.id}/verify`)}
-                        className="px-3 py-1 rounded-lg bg-black text-white text-xs hover:opacity-90">
-                        Verify
-                      </button>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Map */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold mb-4">Incident Map</h2>
+              <div className="h-96 rounded-lg overflow-hidden">
+                <Map
+                  mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
+                  initialViewState={{
+                    longitude: -74.006,
+                    latitude: 40.7128,
+                    zoom: 10,
+                  }}
+                  style={{ width: "100%", height: "100%" }}
+                  mapStyle="mapbox://styles/mapbox/streets-v11"
+                >
+                  {incidents
+                    .filter((incident) => incident.latitude && incident.longitude)
+                    .map((incident) => (
+                      <Marker
+                        key={incident.id}
+                        longitude={incident.longitude!}
+                        latitude={incident.latitude!}
+                        onClick={() => setSelectedIncident(incident)}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-full cursor-pointer ${
+                            incident.severity === "critical"
+                              ? "bg-red-500"
+                              : incident.severity === "high"
+                              ? "bg-orange-500"
+                              : incident.severity === "medium"
+                              ? "bg-yellow-500"
+                              : "bg-green-500"
+                          }`}
+                        />
+                      </Marker>
+                    ))}
+
+                  {selectedIncident && (
+                    <Popup
+                      longitude={selectedIncident.longitude!}
+                      latitude={selectedIncident.latitude!}
+                      onClose={() => setSelectedIncident(null)}
+                    >
+                      <div className="p-2">
+                        <h3 className="font-semibold">{selectedIncident.title}</h3>
+                        <p className="text-sm text-gray-600">
+                          {selectedIncident.description}
+                        </p>
+                        <div className="mt-2">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              severityColors[selectedIncident.severity]
+                            }`}
+                          >
+                            {selectedIncident.severity.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    </Popup>
+                  )}
+                </Map>
+              </div>
+            </div>
+          </div>
+
+          {/* Incidents List */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold mb-4">
+                Recent Incidents ({incidents.length})
+              </h2>
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {incidents.map((incident) => (
+                  <div
+                    key={incident.id}
+                    className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => setSelectedIncident(incident)}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-medium text-gray-900">
+                        {incident.title}
+                      </h3>
+                      <div className="flex space-x-2">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            severityColors[incident.severity]
+                          }`}
+                        >
+                          {incident.severity.toUpperCase()}
+                        </span>
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {incident.type.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      {incident.description.length > 150
+                        ? `${incident.description.substring(0, 150)}...`
+                        : incident.description}
+                    </p>
+                    <div className="flex justify-between items-center text-xs text-gray-500">
+                      <span>
+                        {incident.source && (
+                          <>
+                            Source: {incident.source}
+                            {incident.subreddit && ` • r/${incident.subreddit}`}
+                          </>
+                        )}
+                      </span>
+                      <span>
+                        {new Date(incident.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {incident.url && (
+                      <a
+                        href={incident.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 text-xs mt-1 block"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        View Source →
+                      </a>
                     )}
-                    <button
-                      onClick={() => act(`/api/alerts/${a.id}/dismiss`)}
-                      className="px-3 py-1 rounded-lg border text-xs hover:bg-gray-50">
-                      Dismiss
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const res = await apiFetch("/api/incidents", {
-                          method: "POST",
-                          headers: { "content-type": "application/json" },
-                          body: JSON.stringify({ title: a.title?.slice(0, 80) || "Incident", summary: a.summary ?? "", severity: a.risk, alertIds: [a.id] })
-                        });
-                        if (res.ok) console.log("Incident opened"); else console.log("Failed");
-                      }}
-                      className="px-3 py-1 rounded-lg border text-xs hover:bg-gray-50">
-                      Open Incident
-                    </button>
                   </div>
-                </Td>
-                <Td>
-                  {a.contentUrl ? (
-                    <a className="text-blue-600 hover:underline" href={a.contentUrl} target="_blank" rel="noreferrer">Open</a>
-                  ) : "—"}
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                ))}
+                {incidents.length === 0 && (
+                  <div className="text-center text-gray-500 py-8">
+                    No incidents found. Click "Scan Reddit" to start monitoring.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <div className="mt-6 flex gap-3">
-        <button onClick={async () => { await apiFetch("/api/scan", { method: "POST" }); mutate(); }}
-          className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90">
-          Run Mock Scan
-        </button>
-        <Link href="/api/alerts" className="px-4 py-2 rounded-xl border hover:bg-gray-50">View JSON</Link>
-      </div>
-    </main>
+    </div>
   );
 }
-
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{children}</th>;
-}
-function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-3 text-sm ${className}`}>{children}</td>;
-}
-
-

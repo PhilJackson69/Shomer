@@ -1,0 +1,190 @@
+# Prometheus Security Monitoring Rules
+# Exact PromQL queries for production security monitoring
+
+groups:
+- name: jwt_security_alerts
+  rules:
+  # Token verify errors - alert if error rate > 2%
+  - alert: JWTVerifyErrorRateHigh
+    expr: |
+      sum(rate(app_auth_jwt_verify_errors_total[5m])) 
+        / clamp_min(sum(rate(app_auth_jwt_verify_attempts_total[5m])),1) * 100
+      > 2
+    for: 2m
+    labels:
+      severity: ticket
+      service: auth
+    annotations:
+      summary: "JWT verification error rate is high"
+      description: "JWT verification error rate is {{ $value }}%, above 2% threshold"
+      runbook_url: "https://docs.shomer.app/runbooks/jwt-errors"
+
+  # Refresh reuse detections - any detection is critical
+  - alert: RefreshTokenReuseDetected
+    expr: sum(increase(app_auth_refresh_reuse_detected_total[5m])) > 0
+    for: 0m
+    labels:
+      severity: page
+      service: auth
+    annotations:
+      summary: "Refresh token reuse detected - potential security breach"
+      description: "{{ $value }} refresh token reuse(s) detected in the last 5 minutes"
+      runbook_url: "https://docs.shomer.app/runbooks/refresh-reuse"
+
+  # JWKS health - p95 latency > 300ms or 5xx errors > 0.5%
+  - alert: JWKSHealthDegraded
+    expr: |
+      histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{route="/.well-known/jwks.json"}[5m])) by (le))
+      > 0.3
+      or
+      sum(rate(http_server_errors_total{route="/.well-known/jwks.json"}[5m])) > 0
+    for: 1m
+    labels:
+      severity: page
+      service: jwks
+    annotations:
+      summary: "JWKS endpoint health degraded"
+      description: "JWKS p95 latency is {{ $value }}s or 5xx error rate is high"
+      runbook_url: "https://docs.shomer.app/runbooks/jwks-health"
+
+  # CSRF mismatches spike - > 50 in 5 minutes
+  - alert: CSRFMismatchSpike
+    expr: sum(increase(app_csrf_mismatch_total[5m])) > 50
+    for: 1m
+    labels:
+      severity: ticket
+      service: csrf
+    annotations:
+      summary: "CSRF mismatch spike detected"
+      description: "{{ $value }} CSRF mismatches in the last 5 minutes"
+      runbook_url: "https://docs.shomer.app/runbooks/csrf-mismatch"
+
+- name: auth_security_alerts
+  rules:
+  # Failed login attempts spike
+  - alert: FailedLoginSpike
+    expr: sum(rate(app_auth_login_failed_total[5m])) > 10
+    for: 2m
+    labels:
+      severity: ticket
+      service: auth
+    annotations:
+      summary: "High rate of failed login attempts"
+      description: "{{ $value }} failed logins per second"
+      runbook_url: "https://docs.shomer.app/runbooks/failed-logins"
+
+  # Suspicious authentication patterns
+  - alert: SuspiciousAuthPatterns
+    expr: |
+      sum(rate(app_auth_suspicious_activity_total[5m])) > 5
+      or
+      sum(rate(app_auth_brute_force_attempts_total[5m])) > 3
+    for: 1m
+    labels:
+      severity: page
+      service: auth
+    annotations:
+      summary: "Suspicious authentication patterns detected"
+      description: "Suspicious activity rate: {{ $value }} events/sec"
+      runbook_url: "https://docs.shomer.app/runbooks/suspicious-auth"
+
+- name: api_security_alerts
+  rules:
+  # Rate limiting violations
+  - alert: RateLimitViolationsHigh
+    expr: sum(rate(app_rate_limit_violations_total[5m])) > 20
+    for: 2m
+    labels:
+      severity: ticket
+      service: api
+    annotations:
+      summary: "High rate of rate limit violations"
+      description: "{{ $value }} rate limit violations per second"
+      runbook_url: "https://docs.shomer.app/runbooks/rate-limits"
+
+  # Unauthorized access attempts
+  - alert: UnauthorizedAccessSpike
+    expr: sum(rate(app_auth_unauthorized_total[5m])) > 5
+    for: 2m
+    labels:
+      severity: ticket
+      service: auth
+    annotations:
+      summary: "High rate of unauthorized access attempts"
+      description: "{{ $value }} unauthorized attempts per second"
+      runbook_url: "https://docs.shomer.app/runbooks/unauthorized-access"
+
+- name: infrastructure_security_alerts
+  rules:
+  # TLS certificate expiration
+  - alert: TLSCertificateExpiringSoon
+    expr: (tls_certificate_expiry_timestamp_seconds - time()) / 86400 < 30
+    for: 0m
+    labels:
+      severity: ticket
+      service: tls
+    annotations:
+      summary: "TLS certificate expiring soon"
+      description: "Certificate expires in {{ $value }} days"
+      runbook_url: "https://docs.shomer.app/runbooks/tls-renewal"
+
+  # Database connection security
+  - alert: DatabaseConnectionAnomaly
+    expr: |
+      sum(rate(database_connections_failed_total[5m])) > 1
+      or
+      sum(rate(database_connections_abnormal_total[5m])) > 0.5
+    for: 2m
+    labels:
+      severity: ticket
+      service: database
+    annotations:
+      summary: "Database connection anomalies detected"
+      description: "{{ $value }} abnormal database connections per second"
+      runbook_url: "https://docs.shomer.app/runbooks/db-security"
+
+# Additional monitoring queries for dashboards
+# These can be used in Grafana dashboards
+
+# JWT Token Metrics Dashboard Queries:
+# - Token verification success rate:
+#   sum(rate(app_auth_jwt_verify_success_total[5m])) / sum(rate(app_auth_jwt_verify_attempts_total[5m])) * 100
+
+# - Token verification latency p95:
+#   histogram_quantile(0.95, sum(rate(app_auth_jwt_verify_duration_seconds_bucket[5m])) by (le))
+
+# - Active sessions count:
+#   sum(app_auth_active_sessions_total)
+
+# - Refresh token rotation rate:
+#   sum(rate(app_auth_refresh_token_rotated_total[5m]))
+
+# Security Event Metrics:
+# - Security events by type:
+#   sum by (event_type) (rate(app_security_events_total[5m]))
+
+# - Failed authentication attempts by IP:
+#   sum by (client_ip) (rate(app_auth_failed_total[5m]))
+
+# - CSRF token validation success rate:
+#   sum(rate(app_csrf_validation_success_total[5m])) / sum(rate(app_csrf_validation_attempts_total[5m])) * 100
+
+# API Security Metrics:
+# - Request rate by endpoint:
+#   sum by (endpoint) (rate(http_server_requests_total[5m]))
+
+# - Error rate by endpoint:
+#   sum by (endpoint) (rate(http_server_errors_total[5m])) / sum by (endpoint) (rate(http_server_requests_total[5m])) * 100
+
+# - Response time p95 by endpoint:
+#   histogram_quantile(0.95, sum by (endpoint) (rate(http_server_request_duration_seconds_bucket[5m])) by (le, endpoint))
+
+# Infrastructure Security:
+# - TLS handshake success rate:
+#   sum(rate(tls_handshake_success_total[5m])) / sum(rate(tls_handshake_attempts_total[5m])) * 100
+
+# - Database query performance:
+#   histogram_quantile(0.95, sum(rate(database_query_duration_seconds_bucket[5m])) by (le))
+
+# - Cache hit rate:
+#   sum(rate(cache_hits_total[5m])) / sum(rate(cache_requests_total[5m])) * 100

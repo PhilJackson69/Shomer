@@ -1,0 +1,16 @@
+title = "Shomer Security Configuration"
+version = "8.18.0"
+[[rules]]
+description = "Shomer API Key"
+regex = '''shk_[a-zA-Z0-9]{40,}'''
+tags = ["shomer", "api-key"]
+
+[[rules]]
+description = "JWT Secret"
+regex = '''JWT_SECRET\s*=\s*['"][^'"]{32,}['"]'''
+tags = ["jwt", "secret"]
+
+[[rules]]
+description = "Database URL"
+regex = '''DATABASE_URL\s*=\s*['"][^'"]*['"]'''
+tags = ["database", "url"]

@@ -132,12 +132,17 @@ security-check: ## Run security-focused checks
 
 security-test: ## Run comprehensive security tests
 	@echo "🧪 Running security test suite..."
-	cd apps/api && pytest tests/test_security.py -v --tb=short
+	cd apps/api && pytest tests/test_security.py tests/test_security_hardening.py -v --tb=short
 	@echo "✅ Security tests complete!"
 
 dev-secure: ## Start development with security focus
 	@echo "🔒 Starting secure development mode..."
 	@echo "Copying environment template..."
-	@cp .env.example .env || echo "⚠️  .env already exists"
+	@cp env.example .env || echo "⚠️  .env already exists"
 	@echo "Starting services with security middleware..."
 	$(MAKE) -j2 api web
+
+validate-secrets: ## Validate secret strength
+	@echo "🔐 Validating secret strength..."
+	cd apps/api && python -m app.core.security generate
+	@echo "✅ Secret validation complete!"

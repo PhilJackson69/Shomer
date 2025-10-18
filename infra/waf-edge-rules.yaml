@@ -1,0 +1,284 @@
+# Shomer WAF Edge Rules Configuration
+# Ready-to-ship WAF rules for production security
+
+# CloudFlare WAF Rules
+cloudflare_rules:
+  # Block JSON GET requests with body
+  - id: "block-json-get-with-body"
+    expression: |
+      (http.request.method eq "GET") and 
+      (http.request.body.truncated eq false) and 
+      (http.request.body contains "{") and 
+      (http.request.body contains "}")
+    action: "block"
+    action_parameters:
+      response:
+        status_code: 400
+        content: '{"error": "JSON GET requests with body are not allowed"}'
+        content_type: "application/json"
+    description: "Block JSON GET requests with body (potential CSRF vector)"
+
+  # Rate limit auth endpoints more strictly
+  - id: "rate-limit-auth-endpoints"
+    expression: |
+      (http.request.uri.path matches "^/api/v1/auth/.*$")
+    action: "rate_limit"
+    action_parameters:
+      rate_limit:
+        requests_per_period: 10
+        period: 60
+    description: "Rate limit auth endpoints to 10 requests per minute per IP"
+
+  # Block requests to private IP ranges
+  - id: "block-private-ip-requests"
+    expression: |
+      (http.request.uri contains "127.0.0.1") or
+      (http.request.uri contains "169.254.169.254") or
+      (http.request.uri contains "10.0.0.") or
+      (http.request.uri contains "192.168.") or
+      (http.request.uri contains "172.16.") or
+      (http.request.uri contains "172.17.") or
+      (http.request.uri contains "172.18.") or
+      (http.request.uri contains "172.19.") or
+      (http.request.uri contains "172.20.") or
+      (http.request.uri contains "172.21.") or
+      (http.request.uri contains "172.22.") or
+      (http.request.uri contains "172.23.") or
+      (http.request.uri contains "172.24.") or
+      (http.request.uri contains "172.25.") or
+      (http.request.uri contains "172.26.") or
+      (http.request.uri contains "172.27.") or
+      (http.request.uri contains "172.28.") or
+      (http.request.uri contains "172.29.") or
+      (http.request.uri contains "172.30.") or
+      (http.request.uri contains "172.31.")
+    action: "block"
+    action_parameters:
+      response:
+        status_code: 403
+        content: '{"error": "Access to private IP ranges is not allowed"}'
+        content_type: "application/json"
+    description: "Block requests to private IP ranges (SSRF protection)"
+
+  # Block suspicious user agents
+  - id: "block-suspicious-user-agents"
+    expression: |
+      (http.user_agent contains "sqlmap") or
+      (http.user_agent contains "nikto") or
+      (http.user_agent contains "nmap") or
+      (http.user_agent contains "masscan") or
+      (http.user_agent contains "zap") or
+      (http.user_agent contains "burp") or
+      (http.user_agent contains "w3af") or
+      (http.user_agent contains "acunetix") or
+      (http.user_agent contains "nessus") or
+      (http.user_agent contains "openvas")
+    action: "block"
+    action_parameters:
+      response:
+        status_code: 403
+        content: '{"error": "Access denied"}'
+        content_type: "application/json"
+    description: "Block requests from known security scanning tools"
+
+  # Block common attack patterns
+  - id: "block-common-attacks"
+    expression: |
+      (http.request.uri contains "..") or
+      (http.request.uri contains "<script") or
+      (http.request.uri contains "javascript:") or
+      (http.request.uri contains "vbscript:") or
+      (http.request.uri contains "onload=") or
+      (http.request.uri contains "onerror=") or
+      (http.request.uri contains "union select") or
+      (http.request.uri contains "drop table") or
+      (http.request.uri contains "insert into") or
+      (http.request.uri contains "delete from")
+    action: "block"
+    action_parameters:
+      response:
+        status_code: 403
+        content: '{"error": "Request contains suspicious content"}'
+        content_type: "application/json"
+    description: "Block common attack patterns (XSS, SQL injection, path traversal)"
+
+  # Rate limit by IP (global)
+  - id: "global-rate-limit"
+    expression: |
+      (http.request.method in {"POST" "PUT" "PATCH" "DELETE"})
+    action: "rate_limit"
+    action_parameters:
+      rate_limit:
+        requests_per_period: 100
+        period: 60
+    description: "Global rate limit for write operations (100 requests per minute per IP)"
+
+  # Block requests without proper headers
+  - id: "require-user-agent"
+    expression: |
+      (http.user_agent eq "")
+    action: "block"
+    action_parameters:
+      response:
+        status_code: 400
+        content: '{"error": "User-Agent header is required"}'
+        content_type: "application/json"
+    description: "Block requests without User-Agent header"
+
+  # Block requests with suspicious content types
+  - id: "block-suspicious-content-types"
+    expression: |
+      (http.request.headers["content-type"] contains "multipart/form-data") and
+      (http.request.headers["content-length"] gt 10485760) # 10MB
+    action: "block"
+    action_parameters:
+      response:
+        status_code: 413
+        content: '{"error": "File too large"}'
+        content_type: "application/json"
+    description: "Block large multipart uploads (file size limit)"
+
+# AWS WAF Rules
+aws_waf_rules:
+  # Rate limiting rule
+  - name: "RateLimitRule"
+    priority: 1
+    action: "BLOCK"
+    rate_limit:
+      limit: 2000
+      window_minutes: 5
+    scope: "CLOUDFRONT"
+    statement:
+      rate_based_statement:
+        limit: 2000
+        aggregate_key_type: "IP"
+    visibility_config:
+      sampled_requests_enabled: true
+      cloudwatch_metrics_enabled: true
+      metric_name: "RateLimitRule"
+
+  # SQL injection rule
+  - name: "SQLInjectionRule"
+    priority: 2
+    action: "BLOCK"
+    scope: "CLOUDFRONT"
+    statement:
+      managed_rule_group_statement:
+        vendor_name: "AWS"
+        name: "AWSManagedRulesSQLiRuleSet"
+    visibility_config:
+      sampled_requests_enabled: true
+      cloudwatch_metrics_enabled: true
+      metric_name: "SQLInjectionRule"
+
+  # XSS rule
+  - name: "XSSRule"
+    priority: 3
+    action: "BLOCK"
+    scope: "CLOUDFRONT"
+    statement:
+      managed_rule_group_statement:
+        vendor_name: "AWS"
+        name: "AWSManagedRulesKnownBadInputsRuleSet"
+    visibility_config:
+      sampled_requests_enabled: true
+      cloudwatch_metrics_enabled: true
+      metric_name: "XSSRule"
+
+  # IP reputation rule
+  - name: "IPReputationRule"
+    priority: 4
+    action: "BLOCK"
+    scope: "CLOUDFRONT"
+    statement:
+      managed_rule_group_statement:
+        vendor_name: "AWS"
+        name: "AWSManagedRulesAmazonIpReputationList"
+    visibility_config:
+      sampled_requests_enabled: true
+      cloudwatch_metrics_enabled: true
+      metric_name: "IPReputationRule"
+
+  # Core rule set
+  - name: "CoreRuleSet"
+    priority: 5
+    action: "BLOCK"
+    scope: "CLOUDFRONT"
+    statement:
+      managed_rule_group_statement:
+        vendor_name: "AWS"
+        name: "AWSManagedRulesCommonRuleSet"
+    visibility_config:
+      sampled_requests_enabled: true
+      cloudwatch_metrics_enabled: true
+      metric_name: "CoreRuleSet"
+
+# Custom rules for specific endpoints
+custom_rules:
+  # Auth endpoint protection
+  - name: "AuthEndpointProtection"
+    expression: |
+      (http.request.uri.path matches "^/api/v1/auth/.*$") and
+      (http.request.method eq "POST") and
+      (cf.threat_score gt 14)
+    action: "challenge"
+    description: "Challenge requests to auth endpoints with high threat score"
+
+  # Admin endpoint protection
+  - name: "AdminEndpointProtection"
+    expression: |
+      (http.request.uri.path matches "^/api/v1/admin/.*$") and
+      (cf.country ne "US") and
+      (cf.country ne "CA")
+    action: "block"
+    action_parameters:
+      response:
+        status_code: 403
+        content: '{"error": "Admin access restricted by geography"}'
+        content_type: "application/json"
+    description: "Block admin endpoint access from non-US/CA countries"
+
+  # File upload protection
+  - name: "FileUploadProtection"
+    expression: |
+      (http.request.uri.path matches "^/api/v1/.*upload.*$") and
+      (http.request.headers["content-type"] contains "multipart/form-data") and
+      (http.request.headers["content-length"] gt 5242880) # 5MB
+    action: "block"
+    action_parameters:
+      response:
+        status_code: 413
+        content: '{"error": "File size exceeds limit"}'
+        content_type: "application/json"
+    description: "Block file uploads larger than 5MB"
+
+# Monitoring and logging
+monitoring:
+  # Enable logging for all blocked requests
+  log_blocked_requests: true
+  
+  # Metrics to track
+  metrics:
+    - "blocked_requests_total"
+    - "rate_limited_requests_total"
+    - "challenged_requests_total"
+    - "threat_score_distribution"
+    - "country_distribution"
+    - "user_agent_distribution"
+  
+  # Alert thresholds
+  alerts:
+    - metric: "blocked_requests_total"
+      threshold: 100
+      period: "5m"
+      severity: "warning"
+    
+    - metric: "rate_limited_requests_total"
+      threshold: 50
+      period: "5m"
+      severity: "warning"
+    
+    - metric: "challenged_requests_total"
+      threshold: 20
+      period: "5m"
+      severity: "info"

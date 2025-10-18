@@ -1,0 +1,126 @@
+groups:
+  - name: security.hardening.rules
+    rules:
+      # Refresh token reuse detection
+      - alert: RefreshTokenReuseDetected
+        expr: increase(security_refresh_token_reuse_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "Refresh token reuse detected - potential security breach"
+          description: "{{ $value }} refresh token reuse attempts detected in the last 5 minutes"
+          runbook_url: "https://shomer.app/docs/security/refresh-token-reuse"
+
+      # JWKS endpoint health
+      - alert: JWKSEndpointDown
+        expr: up{job="shomer-api",instance=~".*/.well-known/jwks.json"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: authentication
+        annotations:
+          summary: "JWKS endpoint is down"
+          description: "JWKS endpoint {{ $labels.instance }} is unreachable - authentication will fail"
+          runbook_url: "https://shomer.app/docs/security/jwks-outage"
+
+      - alert: JWKSEndpointLatencyHigh
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="shomer-api",path="/.well-known/jwks.json"}[5m])) > 0.3
+        for: 2m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "JWKS endpoint latency is high"
+          description: "95th percentile latency for JWKS endpoint is {{ $value }}s (threshold: 0.3s)"
+
+      # Token verification errors
+      - alert: TokenVerificationErrorsHigh
+        expr: rate(security_token_verification_errors_total[5m]) / rate(security_token_verification_total[5m]) > 0.02
+        for: 3m
+        labels:
+          severity: warning
+          category: authentication
+        annotations:
+          summary: "High token verification error rate"
+          description: "Token verification error rate is {{ $value | humanizePercentage }} (threshold: 2%)"
+
+      # Rate limiting on auth endpoints
+      - alert: AuthEndpointRateLimitHigh
+        expr: rate(http_requests_total{job="shomer-api",path=~"/api/v1/auth/.*",status="429"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High rate limiting on auth endpoints"
+          description: "Rate limiting triggered {{ $value }} times per second on auth endpoints"
+
+      # Security events
+      - alert: SecurityEventDetected
+        expr: increase(security_events_total{severity="HIGH"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "High severity security event detected"
+          description: "{{ $value }} high severity security events in the last 5 minutes"
+
+      # Algorithm confusion attempts
+      - alert: AlgorithmConfusionAttempts
+        expr: increase(security_algorithm_confusion_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "Algorithm confusion attack attempts detected"
+          description: "{{ $value }} algorithm confusion attempts in the last 5 minutes"
+
+      # Key rotation monitoring
+      - alert: KeyRotationFailed
+        expr: increase(security_key_rotation_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          category: authentication
+        annotations:
+          summary: "Key rotation failed"
+          description: "{{ $value }} key rotation failures in the last 5 minutes"
+
+      # Clock skew detection
+      - alert: ClockSkewDetected
+        expr: security_clock_skew_seconds > 60
+        for: 1m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "Clock skew detected"
+          description: "Clock skew of {{ $value }}s detected (threshold: 60s)"
+
+  - name: security.hardening.slo
+    rules:
+      # SLO: JWKS availability
+      - record: slo:jwks_availability_ratio
+        expr: |
+          sum(rate(http_requests_total{job="shomer-api",path="/.well-known/jwks.json",status!~"5.."}[5m])) /
+          sum(rate(http_requests_total{job="shomer-api",path="/.well-known/jwks.json"}[5m]))
+
+      # SLO: Token verification success rate
+      - record: slo:token_verification_success_ratio
+        expr: |
+          sum(rate(security_token_verification_total{status="success"}[5m])) /
+          sum(rate(security_token_verification_total[5m]))
+
+      # SLO: Auth endpoint availability
+      - record: slo:auth_endpoint_availability_ratio
+        expr: |
+          sum(rate(http_requests_total{job="shomer-api",path=~"/api/v1/auth/.*",status!~"5.."}[5m])) /
+          sum(rate(http_requests_total{job="shomer-api",path=~"/api/v1/auth/.*"}[5m]))
+
+      # SLO: Security event response time
+      - record: slo:security_event_response_time_p95
+        expr: histogram_quantile(0.95, rate(security_event_processing_duration_seconds_bucket[5m]))

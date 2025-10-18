@@ -1,0 +1,75 @@
+name: DAST Security Scan
+
+on:
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  dast-scan:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up environment
+      run: |
+        echo "PUBLIC_BASE_URL=https://shomer.app" >> $GITHUB_ENV
+        echo "ZAP_REPORT_FILE=zap-report.html" >> $GITHUB_ENV
+        
+    - name: Run DAST baseline scan
+      run: |
+        chmod +x scripts/dast_baseline_scan.sh
+        ./scripts/dast_baseline_scan.sh
+        
+    - name: Upload DAST artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dast-scan-results
+        path: |
+          zap-report.html
+          zap-scan-report.xml
+          zap-scan-report.json
+          zap.log
+        retention-days: 30
+        
+    - name: Comment on PR (if applicable)
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          if (fs.existsSync('zap-report.html')) {
+            const report = fs.readFileSync('zap-report.html', 'utf8');
+            const highCount = (report.match(/High/g) || []).length;
+            const mediumCount = (report.match(/Medium/g) || []).length;
+            
+            if (highCount > 0 || mediumCount > 0) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `🚨 **DAST Security Scan Results**
+                
+                **High severity findings:** ${highCount}
+                **Medium severity findings:** ${mediumCount}
+                
+                Please review the security findings in the uploaded artifacts.`
+              });
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `✅ **DAST Security Scan Results**
+                
+                No Medium/High severity findings detected.
+                
+                Security scan completed successfully.`
+              });
+            }
+          }
