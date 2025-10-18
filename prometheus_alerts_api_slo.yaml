@@ -1,0 +1,243 @@
+# -------------------------------------------------------------------
+# API Security SLO Alerts
+# Enterprise-grade burn-rate alerting with Google SRE MWMB patterns
+# 
+# Target SLO: 99.9% availability (error budget = 0.1% = 0.001)
+# Critical: fast and slow windows (5m & 1h) at 14.4× EB burn
+# Warning: medium windows (30m & 6h) at 6× EB burn
+# 
+# Adjust slo:error_budget for different targets:
+# - 99.95% → 0.0005
+# - 99.99% → 0.0001
+# -------------------------------------------------------------------
+
+groups:
+  - name: api_slo_alerts
+    interval: 30s
+    rules:
+      # ========== Global SLO Configuration ==========
+      - record: slo:error_budget
+        expr: 0.001  # 99.9% availability target
+
+      # ========== Burn-rate Calculations (Critical) ==========
+      # burn = (error_ratio over window) / error_budget
+      - record: api:writes_burnrate:1h:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE",code!~"2.."}[1h]))
+             /
+             sum by (service, env, cluster, region) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE"}[1h]))
+             / slo:error_budget
+
+      - record: api:writes_burnrate:5m:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE",code!~"2.."}[5m]))
+             /
+             sum by (service, env, cluster, region) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE"}[5m]))
+             / slo:error_budget
+
+      # ========== Burn-rate Calculations (Warning) ==========
+      - record: api:writes_burnrate:6h:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE",code!~"2.."}[6h]))
+             /
+             sum by (service, env, cluster, region) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE"}[6h]))
+             / slo:error_budget
+
+      - record: api:writes_burnrate:30m:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE",code!~"2.."}[30m]))
+             /
+             sum by (service, env, cluster, region) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE"}[30m]))
+             / slo:error_budget
+
+      # ========== Fallback burn-rate for service-only labels ==========
+      - record: api:writes_burnrate:1h:by_service_only
+        expr: sum by (service) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE",code!~"2.."}[1h]))
+             /
+             sum by (service) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE"}[1h]))
+             / slo:error_budget
+
+      - record: api:writes_burnrate:5m:by_service_only
+        expr: sum by (service) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE",code!~"2.."}[5m]))
+             /
+             sum by (service) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE"}[5m]))
+             / slo:error_budget
+
+      - record: api:writes_burnrate:6h:by_service_only
+        expr: sum by (service) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE",code!~"2.."}[6h]))
+             /
+             sum by (service) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE"}[6h]))
+             / slo:error_budget
+
+      - record: api:writes_burnrate:30m:by_service_only
+        expr: sum by (service) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE",code!~"2.."}[30m]))
+             /
+             sum by (service) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE"}[30m]))
+             / slo:error_budget
+
+      # ========== SLO Burn Alerts (Critical) ==========
+      - alert: ApiWritesSLOBurnCritical
+        expr: |
+          (
+            (api:writes_burnrate:1h:svc_env_cluster_region > 14.4)
+            and (api:writes_burnrate:5m:svc_env_cluster_region > 14.4)
+          )
+          or
+          (
+            (api:writes_burnrate:1h:by_service_only > 14.4)
+            and (api:writes_burnrate:5m:by_service_only > 14.4)
+          )
+        for: 5m
+        labels:
+          severity: critical
+          team: sre
+          area: slo
+        annotations:
+          summary: "SLO burn (critical) — {{ $labels.service }}{{ if $labels.env }} ({{ $labels.env }}{{ if $labels.cluster }}/{{ $labels.cluster }}{{ end }}{{ if $labels.region }}/{{ $labels.region }}{{ end }}){{ end }}"
+          description: |
+            Error budget burning >14.4× (5m & 1h).
+            Investigate recent deploys, upstreams, and CSRF/auth paths.
+            1h burn={{ $value | printf "%.2f" }}×
+
+      # ========== SLO Burn Alerts (Warning) ==========
+      - alert: ApiWritesSLOBurnWarning
+        expr: |
+          (
+            (api:writes_burnrate:6h:svc_env_cluster_region > 6)
+            and (api:writes_burnrate:30m:svc_env_cluster_region > 6)
+          )
+          or
+          (
+            (api:writes_burnrate:6h:by_service_only > 6)
+            and (api:writes_burnrate:30m:by_service_only > 6)
+          )
+        for: 10m
+        labels:
+          severity: warning
+          team: sre
+          area: slo
+        annotations:
+          summary: "SLO burn (warning) — {{ $labels.service }}{{ if $labels.env }} ({{ $labels.env }}{{ if $labels.cluster }}/{{ $labels.cluster }}{{ end }}{{ if $labels.region }}/{{ $labels.region }}{{ end }}){{ end }}"
+          description: |
+            Error budget burning >6× (30m & 6h).
+            Watch closely or begin mitigation.
+            6h burn={{ $value | printf "%.2f" }}×
+
+      # ========== Hygiene Alerts (adapted to env/cluster/region) ==========
+      - alert: ApiDegradedResponsesHigh
+        expr: |
+          api:degraded_pct:svc_env_cluster_region > 15
+          or
+          api:degraded_pct:by_service_only > 15
+        for: 5m
+        labels:
+          severity: critical
+          team: sre
+          area: reliability
+        annotations:
+          summary: "High degraded responses (>15%) — {{ $labels.service }}{{ if $labels.env }} ({{ $labels.env }}{{ if $labels.cluster }}/{{ $labels.cluster }}{{ end }}{{ if $labels.region }}/{{ $labels.region }}{{ end }}){{ end }}"
+          description: "Likely backing store/limiter trouble. value={{ $value | printf \"%.1f\" }}%"
+
+      - alert: ApiFetchRetrySuccessLow
+        expr: |
+          api:retry_success_pct:svc_env_cluster_region < 95
+          or
+          api:retry_success_pct:by_service_only < 95
+        for: 10m
+        labels:
+          severity: critical
+          team: web
+          area: api-security
+        annotations:
+          summary: "401→retry success <95% — {{ $labels.service }}{{ if $labels.env }} ({{ $labels.env }}{{ if $labels.cluster }}/{{ $labels.cluster }}{{ end }}{{ if $labels.region }}/{{ $labels.region }}{{ end }}){{ end }}"
+          description: "CSRF rotate/auth instability or upstream timeouts. value={{ $value | printf \"%.1f\" }}%"
+
+      - alert: ApiIdempotencyHitRateHigh
+        expr: |
+          api:idempotency_hit_pct:svc_env_cluster_region > 20
+          or
+          api:idempotency_hit_pct:by_service_only > 20
+        for: 5m
+        labels:
+          severity: critical
+          team: web
+          area: api-idempotency
+        annotations:
+          summary: "Idempotency hits >20% — {{ $labels.service }}{{ if $labels.env }} ({{ $labels.env }}{{ if $labels.cluster }}/{{ $labels.cluster }}{{ end }}{{ if $labels.region }}/{{ $labels.region }}{{ end }}){{ end }}"
+          description: "Likely duplicate submissions or retry storm. value={{ $value | printf \"%.1f\" }}%"
+
+      - alert: CsrfRotationsMissing
+        expr: |
+          (
+            (api:csrf_rotations_per_min:svc_env_cluster_region < 0.05)
+            and (api:writes_rate:svc_env_cluster_region * 60 > 1)
+          )
+          or
+          (
+            (api:csrf_rotations_per_min:by_service_only < 0.05)
+            and (api:writes_rate:by_service_only * 60 > 1)
+          )
+        for: 15m
+        labels:
+          severity: critical
+          team: security
+          area: csrf
+        annotations:
+          summary: "CSRF rotations ~0 while writes ongoing — {{ $labels.service }}{{ if $labels.env }} ({{ $labels.env }}{{ if $labels.cluster }}/{{ $labels.cluster }}{{ end }}{{ if $labels.region }}/{{ $labels.region }}{{ end }}){{ end }}"
+          description: "Proxy stripping headers? Client not primed/rotating?"
+
+      # ========== Additional Hygiene Alerts ==========
+      - alert: ApiDegradedResponsesElevated
+        expr: |
+          api:degraded_pct:svc_env_cluster_region > 5
+          or
+          api:degraded_pct:by_service_only > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: sre
+          area: reliability
+        annotations:
+          summary: "Elevated degraded responses (>5%) — {{ $labels.service }}{{ if $labels.env }} ({{ $labels.env }}{{ if $labels.cluster }}/{{ $labels.cluster }}{{ end }}{{ if $labels.region }}/{{ $labels.region }}{{ end }}){{ end }}"
+          description: "Sustained elevated degraded mode. value={{ $value | printf \"%.1f\" }}%"
+
+      - alert: ApiFetchRetrySuccessLowWarning
+        expr: |
+          api:retry_success_pct:svc_env_cluster_region < 98
+          or
+          api:retry_success_pct:by_service_only < 98
+        for: 15m
+        labels:
+          severity: warning
+          team: web
+          area: api-security
+        annotations:
+          summary: "401→retry success below 98% — {{ $labels.service }}{{ if $labels.env }} ({{ $labels.env }}{{ if $labels.cluster }}/{{ $labels.cluster }}{{ end }}{{ if $labels.region }}/{{ $labels.region }}{{ end }}){{ end }}"
+          description: "Early signal that retries are less successful than normal. value={{ $value | printf \"%.1f\" }}%"
+
+      - alert: ApiIdempotencyHitRateElevated
+        expr: |
+          api:idempotency_hit_pct:svc_env_cluster_region > 10
+          or
+          api:idempotency_hit_pct:by_service_only > 10
+        for: 10m
+        labels:
+          severity: warning
+          team: web
+          area: api-idempotency
+        annotations:
+          summary: "Idempotency hit rate elevated (>10%) — {{ $labels.service }}{{ if $labels.env }} ({{ $labels.env }}{{ if $labels.cluster }}/{{ $labels.cluster }}{{ end }}{{ if $labels.region }}/{{ $labels.region }}{{ end }}){{ end }}"
+          description: "Potential duplicate-submission pattern. value={{ $value | printf \"%.1f\" }}%"
+
+      - alert: CsrfRotationsUnusuallyHigh
+        expr: |
+          api:csrf_rotations_per_min:svc_env_cluster_region > 20
+          or
+          api:csrf_rotations_per_min:by_service_only > 20
+        for: 10m
+        labels:
+          severity: warning
+          team: security
+          area: csrf
+        annotations:
+          summary: "CSRF rotations unusually high (>20/min) — {{ $labels.service }}{{ if $labels.env }} ({{ $labels.env }}{{ if $labels.cluster }}/{{ $labels.cluster }}{{ end }}{{ if $labels.region }}/{{ $labels.region }}{{ end }}){{ end }}"
+          description: |
+            Excessive rotations can indicate token thrash (cookies missing,
+            constant 401/419, or client not persisting token).
+            rotations_per_min={{ $value | printf "%.2f" }}

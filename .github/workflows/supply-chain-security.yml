@@ -1,0 +1,105 @@
+name: Supply Chain Security
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  supply-chain-security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for SLSA provenance
+        
+    - name: Set up environment
+      run: |
+        echo "IMAGE_NAME=ghcr.io/${{ github.repository }}" >> $GITHUB_ENV
+        echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+        echo "GITHUB_SHA=${{ github.sha }}" >> $GITHUB_ENV
+        echo "GITHUB_RUN_ID=${{ github.run_id }}" >> $GITHUB_ENV
+        echo "GITHUB_REPOSITORY=${{ github.repository }}" >> $GITHUB_ENV
+        
+    - name: Build container image
+      run: |
+        docker build -t $IMAGE_NAME:$IMAGE_TAG .
+        docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:latest
+        
+    - name: Run supply chain security process
+      run: |
+        chmod +x scripts/supply_chain_security.sh
+        ./scripts/supply_chain_security.sh
+        
+    - name: Upload supply chain artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: supply-chain-security-artifacts
+        path: |
+          sbom.json
+          sbom-frontend.json
+          slsa-provenance.json
+          cosign.key.pub
+        retention-days: 90
+        
+    - name: Upload container image
+      if: github.event_name == 'release'
+      run: |
+        echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        docker push $IMAGE_NAME:$IMAGE_TAG
+        docker push $IMAGE_NAME:latest
+        
+    - name: Create release with SBOM
+      if: github.event_name == 'release'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Upload SBOM as release asset
+          if (fs.existsSync('sbom.json')) {
+            const sbom = fs.readFileSync('sbom.json', 'utf8');
+            const release = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id
+            });
+            
+            // Upload SBOM as release asset
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id,
+              name: 'sbom.json',
+              data: sbom,
+              headers: {
+                'content-type': 'application/json'
+              }
+            });
+            
+            console.log('✅ SBOM uploaded as release asset');
+          }
+          
+    - name: Comment on PR (if applicable)
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `🔐 **Supply Chain Security Check**
+            
+            ✅ Container image built and signed
+            ✅ SBOM generated for backend and frontend
+            ✅ SLSA provenance created
+            ✅ Cosign attestations attached
+            
+            Supply chain security process completed successfully.`
+          });

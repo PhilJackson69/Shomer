@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_active_user, require_role
 from app.core.media import process_tip_photo
 from app.core.rbac import Permission, require_permission
+from app.core.validation import sanitize_text_input, enhanced_validate_file_upload, sanitize_filename
 from app.db.base import get_db
 from app.middleware.audit import create_audit_log
 from app.models.tip import Tip
@@ -42,11 +43,38 @@ async def create_tip(
     - File hash is generated for duplicate detection
     - Original can be preserved if legally_required=True
     """
+    # Sanitize text inputs
+    content = sanitize_text_input(content, max_length=5000)
+    submitter_email = sanitize_text_input(submitter_email or "", max_length=255)
+    submitter_phone = sanitize_text_input(submitter_phone or "", max_length=20)
+    location = sanitize_text_input(location or "", max_length=500)
+    
     # Handle image upload if provided
     image_url = None
     metadata = {}
     
     if image:
+        # Read file content for enhanced validation
+        file_content = await image.read()
+        
+        # Enhanced file validation with libmagic and security checks
+        is_valid, error = enhanced_validate_file_upload(
+            image.filename or "unnamed",
+            image.content_type or "application/octet-stream",
+            image.size or 0,
+            file_content,
+            allowed_categories=["image"]
+        )
+        
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image validation failed: {error}"
+            )
+        
+        # Sanitize filename
+        sanitized_filename = sanitize_filename(image.filename or "unnamed")
+        
         # Validate image type
         if not image.content_type or not image.content_type.startswith("image/"):
             raise HTTPException(
@@ -56,14 +84,13 @@ async def create_tip(
 
         # Process image: scrub EXIF and generate hashes
         try:
-            # Read uploaded file
-            file_content = await image.read()
+            # Create file object from content
             file_obj = io.BytesIO(file_content)
             
             # Process with EXIF scrubbing
             result = process_tip_photo(
                 file=file_obj,
-                filename=image.filename or "upload.jpg",
+                filename=sanitized_filename,
                 legally_required=legally_required,
             )
             

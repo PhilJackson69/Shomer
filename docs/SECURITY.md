@@ -1061,6 +1061,126 @@ if not is_valid:
 
 ---
 
+## 13. Security Implementation Details
+
+### 13.1 Security Middleware Stack
+
+Our application implements a comprehensive security middleware stack:
+
+```
+Request → CORS → Request ID → Logging Redaction → Security Headers → 
+CSRF Protection → Rate Limiting → Idempotency → Audit Logging → Application
+```
+
+**Key Components:**
+- **Security Headers**: Comprehensive headers including CSP, HSTS, X-Frame-Options
+- **CSRF Protection**: HMAC-signed double-submit tokens with rotation
+- **Rate Limiting**: Redis-backed with progressive backoff and memory fallback
+- **Input Validation**: HTML sanitization, file upload validation, text cleaning
+- **Error Hardening**: PII redaction, stack trace sanitization, request ID integration
+
+### 13.2 Secret Management
+
+**Secret Validation:**
+- Minimum 32 characters for all secrets
+- Rejection of placeholder/default values
+- Production-specific validation patterns
+- Startup validation with meaningful error messages
+
+**Environment Hardening:**
+- HTTPS enforcement for production URLs
+- No localhost/127.0.0.1 in production
+- Feature flag controls for security features
+
+### 13.3 Two-Factor Authentication (2FA)
+
+**Implementation:**
+- TOTP (Time-based One-Time Password) using RFC 6238
+- QR code generation for easy setup
+- Backup codes for account recovery
+- Admin-only access with feature flag control
+
+**Security Features:**
+- Cryptographically secure secret generation
+- Time window tolerance for clock drift
+- Automatic backup code regeneration
+- Secure token verification
+
+### 13.4 File Upload Security
+
+**Validation Layers:**
+- File extension whitelist by category
+- MIME type validation
+- File size limits per category
+- Dangerous extension blocking (.exe, .bat, .sh, etc.)
+- Filename sanitization to prevent path traversal
+
+**Allowed Categories:**
+- **Images**: .jpg, .png, .gif, .webp, .svg (10MB max)
+- **Documents**: .pdf, .doc, .docx, .txt, .rtf (25MB max)
+- **Video**: .mp4, .avi, .mov, .wmv, .webm (100MB max)
+- **Audio**: .mp3, .wav, .ogg, .m4a (50MB max)
+
+### 13.5 Input Sanitization
+
+**HTML Sanitization:**
+- Bleach library for XSS prevention
+- Allowed tags: p, br, strong, em, a, img, etc.
+- Allowed attributes: href, src, alt, title, etc.
+- CSS sanitization for style attributes
+
+**Text Sanitization:**
+- Control character removal
+- Whitespace normalization
+- Length limits per field
+- URL validation with scheme restrictions
+
+### 13.6 Error Response Hardening
+
+**PII Redaction:**
+- Email addresses → `<REDACTED_EMAIL>`
+- Phone numbers → `<REDACTED_PHONE>`
+- API keys/tokens → `<REDACTED_TOKEN>`
+- Database URLs → `<REDACTED_DB_URL>`
+
+**Stack Trace Sanitization:**
+- File path removal (keep filename only)
+- Line number removal from sensitive files
+- Production vs development error detail levels
+
+**Consistent Error Format:**
+```json
+{
+  "detail": {
+    "message": "Error description",
+    "code": "ERROR_CODE",
+    "status_code": 400,
+    "request_id": "req_123456"
+  }
+}
+```
+
+### 13.7 Security Endpoints
+
+- **CSRF**: `GET /api/v1/csrf` - Get CSRF token
+- **2FA Setup**: `POST /api/v1/2fa/setup` - Setup 2FA (admin only)
+- **File Validation**: `POST /api/v1/validation/validate` - Validate uploads
+- **System Metrics**: `GET /api/v1/system/metrics` - System health (admin only)
+- **Security Events**: `GET /api/v1/system/security-events` - Security monitoring
+
+### 13.8 Critical Security Files
+
+- `apps/api/app/core/security.py` - Secret validation
+- `apps/api/app/core/validation.py` - Input sanitization
+- `apps/api/app/core/two_factor.py` - 2FA implementation
+- `apps/api/app/core/error_handling.py` - Error hardening
+- `apps/api/app/middleware/security_headers.py` - Security headers
+- `apps/api/app/middleware/rate_limit.py` - Rate limiting
+- `apps/api/app/middleware/csrf.py` - CSRF protection
+- `apps/web/src/lib/apiFetch.ts` - Client-side security
+
+---
+
 **Security is everyone's responsibility. If you see something, say something: security@shomer.local**
 
 *This policy is publicly available because we believe transparency improves security.*

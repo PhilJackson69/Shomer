@@ -1,0 +1,22 @@
+# Alertmanager Configuration Snippet
+# Add this to your alertmanager.yml
+
+route:
+  receiver: default
+  group_by: [service]
+  routes:
+    - matchers: [ severity="critical" ]
+      receiver: pagerduty
+    - matchers: [ severity="warning" ]
+      receiver: slack
+
+receivers:
+  - name: pagerduty
+    pagerduty_configs:
+      - routing_key: ${PAGERDUTY_KEY}
+        severity: "{{ if eq .CommonLabels.severity \"critical\" }}critical{{ else }}warning{{ end }}"
+        description: "{{ .CommonAnnotations.summary }}\n{{ .CommonAnnotations.description }}"
+  - name: slack
+    slack_configs:
+      - channel: '#api-alerts'
+        text: "*{{ .CommonAnnotations.summary }}*\n{{ .CommonAnnotations.description }}"

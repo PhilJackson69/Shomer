@@ -1,0 +1,102 @@
+# Shomer v1 MVP Makefile
+
+.PHONY: help setup start stop restart logs clean seed test
+
+# Default target
+help:
+	@echo "🛡️ Shomer v1 MVP Commands"
+	@echo "=========================="
+	@echo "setup     - Initial setup and environment configuration"
+	@echo "start     - Start all services with Docker Compose"
+	@echo "stop      - Stop all services"
+	@echo "restart   - Restart all services"
+	@echo "logs      - View logs from all services"
+	@echo "seed      - Run seed script to populate dashboard"
+	@echo "test      - Run API tests"
+	@echo "clean     - Clean up containers and volumes"
+	@echo ""
+
+# Initial setup
+setup:
+	@echo "🔧 Setting up Shomer v1 MVP..."
+	@if [ ! -f .env ]; then \
+		echo "📝 Creating .env file from template..."; \
+		cp env.example .env; \
+		echo "⚠️  Please edit .env file with your API keys before starting services"; \
+	fi
+	@echo "✅ Setup complete! Edit .env file and run 'make start'"
+
+# Start all services
+start:
+	@echo "🚀 Starting Shomer v1 services..."
+	docker-compose -f docker-compose.v1.yml up --build -d
+	@echo "✅ Services started!"
+	@echo "📱 Web Interface: http://localhost:3000"
+	@echo "📚 API Docs: http://localhost:8000/docs"
+	@echo "🤖 NLP Service: http://localhost:8001/docs"
+
+# Stop all services
+stop:
+	@echo "⏹️ Stopping Shomer v1 services..."
+	docker-compose -f docker-compose.v1.yml down
+	@echo "✅ Services stopped!"
+
+# Restart all services
+restart: stop start
+
+# View logs
+logs:
+	docker-compose -f docker-compose.v1.yml logs -f
+
+# Run seed script
+seed:
+	@echo "🌱 Running seed script..."
+	python seed_v1.py
+
+# Run tests
+test:
+	@echo "🧪 Running API tests..."
+	cd apps/api && python -m pytest tests/ -v
+
+# Clean up
+clean:
+	@echo "🧹 Cleaning up containers and volumes..."
+	docker-compose -f docker-compose.v1.yml down -v
+	docker system prune -f
+	@echo "✅ Cleanup complete!"
+
+# Development helpers
+dev-api:
+	@echo "🔧 Starting API in development mode..."
+	cd apps/api && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+dev-web:
+	@echo "🔧 Starting web in development mode..."
+	cd apps/web && npm run dev
+
+dev-nlp:
+	@echo "🔧 Starting NLP service in development mode..."
+	cd services/nlp && python main.py
+
+# Health checks
+health:
+	@echo "🏥 Checking service health..."
+	@echo "API Health:"
+	@curl -s http://localhost:8000/health | jq . || echo "❌ API not responding"
+	@echo "NLP Health:"
+	@curl -s http://localhost:8001/health | jq . || echo "❌ NLP service not responding"
+	@echo "Web Health:"
+	@curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 || echo "❌ Web not responding"
+
+# Quick start for new users
+quickstart: setup start
+	@echo "⏳ Waiting for services to be ready..."
+	@sleep 30
+	@echo "🌱 Running seed script..."
+	@make seed
+	@echo ""
+	@echo "🎉 Shomer v1 MVP is ready!"
+	@echo "📱 Open http://localhost:3000 in your browser"
+	@echo "📚 API documentation: http://localhost:8000/docs"
+
+

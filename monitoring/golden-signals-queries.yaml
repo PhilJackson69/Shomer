@@ -1,0 +1,161 @@
+# Shomer Golden Signals PromQL Queries
+# Production monitoring queries for security and performance
+
+# JWT Verify Error Rate
+# Percentage of JWT verification failures over total attempts
+jwt_verify_error_rate:
+  query: |
+    sum(rate(app_auth_jwt_verify_errors_total[5m])) 
+    / clamp_min(sum(rate(app_auth_jwt_verify_attempts_total[5m])),1) * 100
+  description: "JWT verification error rate percentage (should be < 2%)"
+  alert_threshold: 2.0
+  severity: warning
+
+# JWKS P95 Latency
+# 95th percentile latency for JWKS endpoint
+jwks_p95_latency:
+  query: |
+    histogram_quantile(0.95, 
+      sum(rate(http_server_request_duration_seconds_bucket{route="/.well-known/jwks.json"}[5m])) by (le)
+    ) * 1000
+  description: "JWKS endpoint 95th percentile latency in milliseconds (should be < 300ms)"
+  alert_threshold: 300
+  severity: warning
+
+# Refresh Token Reuse Detections
+# Number of refresh token reuse attempts detected
+refresh_reuse_detected:
+  query: |
+    sum(increase(app_auth_refresh_reuse_detected_total[5m]))
+  description: "Number of refresh token reuse attempts detected (should be 0)"
+  alert_threshold: 1
+  severity: critical
+
+# CSRF Mismatches
+# Number of CSRF token mismatches
+csrf_mismatch_total:
+  query: |
+    sum(increase(app_csrf_mismatch_total[5m]))
+  description: "Number of CSRF token mismatches (should be low)"
+  alert_threshold: 10
+  severity: warning
+
+# HTTP 5xx Error Rate
+# Percentage of HTTP 5xx errors
+http_5xx_rate:
+  query: |
+    sum(rate(http_server_requests_total{status=~"5.."}[5m])) 
+    / sum(rate(http_server_requests_total[5m])) * 100
+  description: "HTTP 5xx error rate percentage (should be < 1%)"
+  alert_threshold: 1.0
+  severity: warning
+
+# Authentication Failure Rate
+# Rate of authentication failures
+auth_failure_rate:
+  query: |
+    sum(rate(app_auth_failures_total[5m]))
+  description: "Authentication failure rate (monitor for spikes)"
+  alert_threshold: 10
+  severity: warning
+
+# Rate Limiting Triggers
+# Number of rate limit violations
+rate_limit_violations:
+  query: |
+    sum(increase(app_rate_limit_violations_total[5m]))
+  description: "Number of rate limit violations (monitor for abuse patterns)"
+  alert_threshold: 100
+  severity: warning
+
+# Database Connection Pool Utilization
+# Database connection pool usage
+db_connection_pool_utilization:
+  query: |
+    (app_db_connections_active / app_db_connections_max) * 100
+  description: "Database connection pool utilization percentage (should be < 80%)"
+  alert_threshold: 80
+  severity: warning
+
+# Redis Connection Health
+# Redis connection status
+redis_connection_health:
+  query: |
+    up{job="redis"} * 100
+  description: "Redis connection health (should be 100%)"
+  alert_threshold: 100
+  severity: critical
+
+# File Upload Security Violations
+# Number of file upload security violations
+file_upload_violations:
+  query: |
+    sum(increase(app_file_upload_violations_total[5m]))
+  description: "File upload security violations (should be 0)"
+  alert_threshold: 1
+  severity: critical
+
+# SSRF Attempts Blocked
+# Number of SSRF attempts blocked
+ssrf_attempts_blocked:
+  query: |
+    sum(increase(app_ssrf_attempts_blocked_total[5m]))
+  description: "SSRF attempts blocked (monitor for attack patterns)"
+  alert_threshold: 5
+  severity: warning
+
+# API Response Time P95
+# 95th percentile API response time
+api_response_time_p95:
+  query: |
+    histogram_quantile(0.95, 
+      sum(rate(http_server_request_duration_seconds_bucket{route=~"/api/.*"}[5m])) by (le)
+    ) * 1000
+  description: "API 95th percentile response time in milliseconds"
+  alert_threshold: 1000
+  severity: warning
+
+# Memory Usage
+# Application memory usage percentage
+memory_usage_percent:
+  query: |
+    (app_memory_usage_bytes / app_memory_limit_bytes) * 100
+  description: "Application memory usage percentage (should be < 85%)"
+  alert_threshold: 85
+  severity: warning
+
+# CPU Usage
+# Application CPU usage percentage
+cpu_usage_percent:
+  query: |
+    rate(app_cpu_usage_seconds_total[5m]) * 100
+  description: "Application CPU usage percentage (should be < 80%)"
+  alert_threshold: 80
+  severity: warning
+
+# Disk Usage
+# Disk usage percentage
+disk_usage_percent:
+  query: |
+    (app_disk_usage_bytes / app_disk_total_bytes) * 100
+  description: "Disk usage percentage (should be < 85%)"
+  alert_threshold: 85
+  severity: warning
+
+# Security Event Rate
+# Rate of security events
+security_event_rate:
+  query: |
+    sum(rate(app_security_events_total[5m]))
+  description: "Security event rate (monitor for anomalies)"
+  alert_threshold: 5
+  severity: warning
+
+# Audit Log Write Rate
+# Rate of audit log writes
+audit_log_write_rate:
+  query: |
+    sum(rate(app_audit_logs_written_total[5m]))
+  description: "Audit log write rate (should be consistent)"
+  alert_threshold: 1000
+  severity: warning
