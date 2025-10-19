@@ -33,4 +33,5 @@ class User(Base):
 
     # Relationships
     audit_logs = relationship("AuditLog", back_populates="user")
+    mfa_settings = relationship("UserMFA", back_populates="user", uselist=False, cascade="all, delete-orphan")
 

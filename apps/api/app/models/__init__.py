@@ -4,6 +4,7 @@ from app.models.audit_log import AuditLog
 from app.models.event import Event
 from app.models.evidence import Evidence, ChainOfCustody, EvidenceAccessLog
 from app.models.incident import Incident
+from app.models.mfa import UserMFA, WebAuthnCredential, MFAAttempt
 from app.models.subscriber import Subscriber
 from app.models.tip import Tip
 from app.models.user import User
@@ -19,5 +20,8 @@ __all__ = [
     "Evidence",
     "ChainOfCustody",
     "EvidenceAccessLog",
+    "UserMFA",
+    "WebAuthnCredential",
+    "MFAAttempt",
 ]
 

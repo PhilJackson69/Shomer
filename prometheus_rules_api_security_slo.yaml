@@ -1,0 +1,124 @@
+# -------------------------------------------------------------------
+# API Security SLO Recording Rules
+# Enterprise-grade SLO monitoring with environment/cluster/region awareness
+# 
+# Assumes these counters are emitted with labels: service, env, cluster, region
+#   csrf_rotations_total
+#   api_fetch_retry_total{outcome="success"|"failure"}
+#   idempotency_hits_total
+#   http_write_requests_total
+#   http_responses_total{degraded="0"|"1", code="2xx|4xx|5xx", method="POST|PUT|PATCH|DELETE"}
+#
+# If your label keys differ, replace env/cluster/region with your actual labels
+# -------------------------------------------------------------------
+
+groups:
+  - name: api_security_recording_v2
+    interval: 30s
+    rules:
+      # ==== Base write traffic (kept by service/env/cluster/region) ====
+      - record: api:writes_rate:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (
+                rate(http_write_requests_total[5m])
+              )
+
+      # ==== CSRF rotations/min ====
+      - record: api:csrf_rotations_per_min:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (
+                rate(csrf_rotations_total[5m])
+              ) * 60
+
+      # ==== Retry success % ====
+      - record: api:retry_success_rate:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (
+                rate(api_fetch_retry_total{outcome="success"}[5m])
+              )
+      - record: api:retry_all_rate:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (
+                rate(api_fetch_retry_total[5m])
+              )
+      - record: api:retry_success_pct:svc_env_cluster_region
+        expr: 100 *
+              api:retry_success_rate:svc_env_cluster_region
+              / ignoring(outcome)
+              api:retry_all_rate:svc_env_cluster_region
+
+      # ==== Idempotency hit % ====
+      - record: api:idempotency_hits_rate:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (
+                rate(idempotency_hits_total[5m])
+              )
+      - record: api:idempotency_hit_pct:svc_env_cluster_region
+        expr: 100 *
+              api:idempotency_hits_rate:svc_env_cluster_region
+              / ignoring(outcome)
+              api:writes_rate:svc_env_cluster_region
+
+      # ==== Degraded response % ====
+      - record: api:responses_rate:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (
+                rate(http_responses_total[5m])
+              )
+      - record: api:responses_degraded_rate:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (
+                rate(http_responses_total{degraded="1"}[5m])
+              )
+      - record: api:degraded_pct:svc_env_cluster_region
+        expr: 100 *
+              api:responses_degraded_rate:svc_env_cluster_region
+              / ignoring(outcome)
+              api:responses_rate:svc_env_cluster_region
+
+      # ==== SLI for writes (2xx / all writes) ====
+      - record: api:writes_2xx_rate:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (
+                rate(http_responses_total{code=~"2..", method=~"POST|PUT|PATCH|DELETE"}[5m])
+              )
+      - record: api:writes_total_rate:svc_env_cluster_region
+        expr: sum by (service, env, cluster, region) (
+                rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE"}[5m])
+              )
+      - record: api:writes_sli_pct:svc_env_cluster_region
+        expr: 100 *
+              api:writes_2xx_rate:svc_env_cluster_region
+              / api:writes_total_rate:svc_env_cluster_region
+
+      # ==== Error ratio (for burn-rate alerts) ====
+      - record: api:writes_error_ratio:svc_env_cluster_region
+        expr: clamp_min(
+                1 - (api:writes_2xx_rate:svc_env_cluster_region
+                     / api:writes_total_rate:svc_env_cluster_region),
+                0
+              )
+
+      # ==== Fallback rules for environments without env/cluster/region labels ====
+      # Use these if you only have 'service' labels
+      - record: api:writes_rate:by_service_only
+        expr: sum by (service) (
+                rate(http_write_requests_total[5m])
+              )
+
+      - record: api:csrf_rotations_per_min:by_service_only
+        expr: sum by (service) (
+                rate(csrf_rotations_total[5m])
+              ) * 60
+
+      - record: api:retry_success_pct:by_service_only
+        expr: 100 *
+              sum by (service) (rate(api_fetch_retry_total{outcome="success"}[5m]))
+              / sum by (service) (rate(api_fetch_retry_total[5m]))
+
+      - record: api:idempotency_hit_pct:by_service_only
+        expr: 100 *
+              sum by (service) (rate(idempotency_hits_total[5m]))
+              / sum by (service) (rate(http_write_requests_total[5m]))
+
+      - record: api:degraded_pct:by_service_only
+        expr: 100 *
+              sum by (service) (rate(http_responses_total{degraded="1"}[5m]))
+              / sum by (service) (rate(http_responses_total[5m]))
+
+      - record: api:writes_sli_pct:by_service_only
+        expr: 100 *
+              sum by (service) (rate(http_responses_total{code=~"2..", method=~"POST|PUT|PATCH|DELETE"}[5m]))
+              / sum by (service) (rate(http_responses_total{method=~"POST|PUT|PATCH|DELETE"}[5m]))

@@ -1,0 +1,86 @@
+﻿[
+    {
+        "mtime_iso":  "2025-10-18T20:29:59.794Z",
+        "path":  "canary-deployment-20250120-000000/canary-phases.json",
+        "sha256":  "f6472f44b9e2ddd89c3c1402d610e3ac8f91883a04c481f246591ca10e823a37",
+        "bytes":  2283
+    },
+    {
+        "mtime_iso":  "2025-10-18T20:27:16.230Z",
+        "path":  "evidence-hashes.txt",
+        "sha256":  "cc64b0c4b21e8a3d2f3b0ec17e303097c5e058a9ba143b7775ae98ea9059adfd",
+        "bytes":  2145
+    },
+    {
+        "mtime_iso":  "2025-10-18T20:29:59.794Z",
+        "path":  "evidence-package-20250120-000000/canary-phases.json",
+        "sha256":  "f6472f44b9e2ddd89c3c1402d610e3ac8f91883a04c481f246591ca10e823a37",
+        "bytes":  2283
+    },
+    {
+        "mtime_iso":  "2025-10-18T20:29:59.797Z",
+        "path":  "evidence-package-20250120-000000/golden-signals-24h.ndjson",
+        "sha256":  "74d52679814bc0ef70526142550e40f93012644900ad42a9f920ca9366d7f2a9",
+        "bytes":  1036
+    },
+    {
+        "mtime_iso":  "2025-10-18T20:29:59.797Z",
+        "path":  "evidence-package-20250120-000000/incidents.log",
+        "sha256":  "0911e8ebbfd5c6f51ab643aabcf6033d4080160b210f3e4082bdb1035afa8746",
+        "bytes":  331
+    },
+    {
+        "mtime_iso":  "2025-10-18T20:29:59.797Z",
+        "path":  "evidence-package-20250120-000000/smoke-tests.ndjson",
+        "sha256":  "846cfd2d9584b629fbebd61ddef4674be2a697ae7b2df7eec6a9051a103d1bda",
+        "bytes":  1659
+    },
+    {
+        "mtime_iso":  "2025-10-18T19:24:30.074Z",
+        "path":  "FINAL_GO_NO_GO_SIGNOFF.md",
+        "sha256":  "b355ef22f604141f9baf4aee53ba8c91a6c4a450723c62e95d4324d386561e73",
+        "bytes":  11158
+    },
+    {
+        "mtime_iso":  "2025-10-18T19:24:30.071Z",
+        "path":  "GO_NO_GO_MEETING_AGENDA.md",
+        "sha256":  "68ce7ddddad535c1ca14e8746f87bb22a8026924a24fa172e24f6792adf28430",
+        "bytes":  7201
+    },
+    {
+        "mtime_iso":  "2025-10-18T19:24:30.071Z",
+        "path":  "GO_NO_GO_SIGNOFF.md",
+        "sha256":  "caf249cde4b66c8145e7b829dcdd743401a45c9f2deaed8b262d2f63b3803fc3",
+        "bytes":  9513
+    },
+    {
+        "mtime_iso":  "2025-10-18T19:24:30.075Z",
+        "path":  "LAUNCH_DAY_RUNBOOK.md",
+        "sha256":  "64aed105e9dc88a4c2ae213ccf693f7d221d8e4ca5e6ab681cfb7e01d744e91a",
+        "bytes":  12633
+    },
+    {
+        "mtime_iso":  "2025-10-18T20:29:59.794Z",
+        "path":  "post-launch-monitoring-20250120-000000/golden-signals-24h.ndjson",
+        "sha256":  "74d52679814bc0ef70526142550e40f93012644900ad42a9f920ca9366d7f2a9",
+        "bytes":  1036
+    },
+    {
+        "mtime_iso":  "2025-10-18T20:29:59.794Z",
+        "path":  "post-launch-monitoring-20250120-000000/incidents.log",
+        "sha256":  "0911e8ebbfd5c6f51ab643aabcf6033d4080160b210f3e4082bdb1035afa8746",
+        "bytes":  331
+    },
+    {
+        "mtime_iso":  "2025-10-18T20:29:59.794Z",
+        "path":  "post-launch-monitoring-20250120-000000/smoke-tests.ndjson",
+        "sha256":  "846cfd2d9584b629fbebd61ddef4674be2a697ae7b2df7eec6a9051a103d1bda",
+        "bytes":  1659
+    },
+    {
+        "mtime_iso":  "2025-10-18T20:29:59.797Z",
+        "path":  "T+24-Post-Launch-Report.md",
+        "sha256":  "b09896d1226b84fac689f0df3473fc0f756544d11647c26557df9e5c36ba66d2",
+        "bytes":  4622
+    }
+]

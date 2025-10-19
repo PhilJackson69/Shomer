@@ -1,0 +1,154 @@
+rules:
+  - id: jwt-hardcoded-secret
+    patterns:
+      - pattern: JWT_SECRET = "..."
+    message: Hardcoded JWT secret detected. Use environment variables for secrets.
+    languages: [python]
+    severity: ERROR
+
+  - id: csrf-token-missing
+    patterns:
+      - pattern: |
+          @router.post(...)
+          def $FUNC(...):
+            ...
+      - not: pattern: |
+          ... X-CSRF-Token ...
+    message: POST endpoint missing CSRF token validation
+    languages: [python]
+    severity: WARNING
+
+  - id: rate-limit-missing
+    patterns:
+      - pattern: |
+          @router.post(...)
+          def $FUNC(...):
+            ...
+      - not: pattern: |
+          ... rate_limit ...
+    message: POST endpoint missing rate limiting
+    languages: [python]
+    severity: WARNING
+
+  - id: file-upload-validation
+    patterns:
+      - pattern: |
+          ... file = ...
+      - not: pattern: |
+          ... validate_file_upload ...
+    message: File upload missing validation
+    languages: [python]
+    severity: ERROR
+
+  - id: sql-injection-risk
+    patterns:
+      - pattern: |
+          ... f"SELECT ... {var} ..." ...
+    message: Potential SQL injection risk with f-string
+    languages: [python]
+    severity: ERROR
+
+  - id: xss-risk
+    patterns:
+      - pattern: |
+          ... {{ $VAR }} ...
+      - not: pattern: |
+          ... | safe ...
+    message: Potential XSS risk with unescaped template variable
+    languages: [html, jinja2]
+    severity: WARNING
+
+  - id: jwt-hs256-in-prod
+    patterns:
+      - pattern: jwt.encode($PAYLOAD, $KEY, algorithm="HS256")
+    message: "HS256 should not be used in production - use RS256 or EdDSA"
+    languages: [python]
+    severity: ERROR
+
+  - id: jwt-missing-kid
+    patterns:
+      - pattern: jwt.encode($PAYLOAD, $PRIV, algorithm=$ALG, headers=$HDRS)
+      - metavariable-pattern:
+          metavariable: $ALG
+          pattern-either:
+            - pattern: "RS256"
+            - pattern: "RS384"
+            - pattern: "RS512"
+            - pattern: "EdDSA"
+      - not: pattern: |
+          ... "kid": ...
+    message: "Asymmetric JWT must include a 'kid' header for key rotation"
+    languages: [python]
+    severity: WARNING
+
+  - id: jwt-none-algorithm
+    patterns:
+      - pattern: jwt.encode($PAYLOAD, "", algorithm="none")
+      - pattern: jwt.decode($TOKEN, "", algorithms=["none"])
+    message: "JWT 'none' algorithm should never be used - major security risk"
+    languages: [python]
+    severity: ERROR
+
+  - id: jwt-excessive-leeway
+    patterns:
+      - pattern: |
+          ... leeway=$LEEWAY ...
+      - metavariable-pattern:
+          metavariable: $LEEWAY
+          pattern-regex: '[0-9]+'
+      - not: pattern: |
+          ... leeway=...
+      - metavariable-comparison:
+          metavariable: $LEEWAY
+          comparison: $LEEWAY <= 60
+    message: "JWT leeway should not exceed 60 seconds for security"
+    languages: [python]
+    severity: WARNING
+
+  - id: hardcoded-private-key
+    patterns:
+      - pattern: |
+          $KEY = """-----BEGIN PRIVATE KEY-----"""
+    message: "Hardcoded private key detected - use environment variables"
+    languages: [python]
+    severity: ERROR
+
+  - id: missing-algorithm-validation
+    patterns:
+      - pattern: |
+          jwt.decode($TOKEN, $KEY, algorithms=$ALGS)
+      - not: pattern: |
+          ... validate_algorithm_not_confused ...
+    message: "JWT decode should include algorithm confusion validation"
+    languages: [python]
+    severity: WARNING
+
+  - id: refresh-token-reuse-detection
+    patterns:
+      - pattern: |
+          ... refresh_token ...
+      - not: pattern: |
+          ... reuse_detection ...
+    message: "Refresh token handling should include reuse detection"
+    languages: [python]
+    severity: WARNING
+
+  - id: missing-security-headers
+    patterns:
+      - pattern: |
+          return JSONResponse(...)
+      - not: pattern: |
+          ... "X-Content-Type-Options" ...
+    message: "API responses should include security headers"
+    languages: [python]
+    severity: WARNING
+
+  - id: csrf-bypass-risk
+    patterns:
+      - pattern: |
+          ... X-CSRF-Token ...
+      - not: pattern: |
+          ... verify_csrf_token ...
+    message: "CSRF token present but not verified"
+    languages: [python]
+    severity: ERROR

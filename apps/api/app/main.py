@@ -8,6 +8,9 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.scheduler import start_scheduler, stop_scheduler
 from app.core.startup import startup_ingestion_scheduler
+from app.core.security import log_security_warnings
+from fastapi import Request
+from app.core.error_handling import setup_error_handlers
 from app.middleware.audit import AuditLoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware, get_redis_client
 from app.middleware.csrf import CSRFProtectionMiddleware
@@ -30,6 +33,9 @@ async def lifespan(app: FastAPI):
     
     # Startup
     logger.info("Starting Shomer API", extra={'request_id': 'startup', 'user_id': '-', 'evidence_id': '-'})
+    
+    # Validate security configuration
+    log_security_warnings()
     
     start_scheduler()
     startup_ingestion_scheduler()
@@ -77,14 +83,24 @@ if settings.ENVIRONMENT == "production":
         allowed_origins.append(settings.WEB_ORIGIN)
 
 # CORS middleware - MUST be added first
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Request-ID"],
-    expose_headers=["X-Request-ID"],
+from app.middleware.security_headers import setup_cors_middleware
+setup_cors_middleware(
+    app, 
+    allowed_origins=allowed_origins, 
+    is_production=(settings.ENVIRONMENT == "production")
 )
+
+# HTTPS trust check middleware (for production)
+if settings.ENVIRONMENT == "production":
+    @app.middleware("http")
+    async def https_trust_check(request: Request, call_next):
+        """Ensure HTTPS is properly configured via proxy headers."""
+        forwarded_proto = request.headers.get("x-forwarded-proto", "https")
+        if forwarded_proto != "https":
+            logger.error(f"Proxy misconfig: not HTTPS (got {forwarded_proto})")
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="HTTPS required")
+        return await call_next(request)
 
 # Request ID middleware (for tracing)
 app.add_middleware(RequestIDMiddleware)
@@ -95,20 +111,15 @@ app.add_middleware(LoggingRedactionMiddleware)
 # Security headers middleware
 app.add_middleware(
     SecurityHeadersMiddleware,
-    enable_hsts=(settings.ENVIRONMENT == "production")
+    enable_hsts=(settings.ENVIRONMENT == "production"),
+    is_production=(settings.ENVIRONMENT == "production")
 )
 
 # CSRF protection middleware (for production)
 if settings.ENVIRONMENT == "production":
     app.add_middleware(
         CSRFProtectionMiddleware,
-        exclude_paths=[
-            "/health",
-            "/docs",
-            "/openapi.json",
-            "/api/v1/auth/login",
-            "/api/v1/auth/logout",
-        ]
+        secret_key=settings.API_SECRET_KEY
     )
 
 # CSRF -> Idempotency -> RateLimit to ensure dedupe before blocking bursts
@@ -120,6 +131,9 @@ app.add_middleware(AuditLoggingMiddleware)
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Set up error handlers
+setup_error_handlers(app)
 
 
 @app.get("/health")

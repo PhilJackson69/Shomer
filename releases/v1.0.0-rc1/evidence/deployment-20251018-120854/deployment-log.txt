@@ -1,0 +1,8 @@
+﻿Deployment Details
+==================
+Timestamp: 10/18/2025 12:08:54
+Service: api
+Environment: staging
+Version: previous
+Traffic: 100%
+Status: SUCCESS

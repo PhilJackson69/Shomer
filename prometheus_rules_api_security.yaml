@@ -1,0 +1,210 @@
+# -------------------------------------------------------------------
+# API Security Hardening — Recording & Alerting Rules
+# Assumes these counters are emitted with at least a `service` label:
+#   csrf_rotations_total
+#   api_fetch_retry_total{outcome="success"|"failure"}
+#   idempotency_hits_total
+#   http_write_requests_total
+#   http_responses_total{degraded="0"|"1"}
+#
+# Optional labels commonly present: job, env, cluster, namespace
+# Adjust label matchers to your environment.
+# -------------------------------------------------------------------
+
+groups:
+  # =========================
+  # === Recording Rules  ===
+  # =========================
+  - name: api_security_recording
+    interval: 30s
+    rules:
+      # ---- CSRF rotations per minute ----
+      - record: api:csrf_rotations_rate_per_min:by_service
+        expr: sum by (service) (
+                rate(csrf_rotations_total[5m])
+              ) * 60
+
+      - record: api:csrf_rotations_rate_per_min:total
+        expr: sum(
+                rate(csrf_rotations_total[5m])
+              ) * 60
+
+      # ---- 401→retry success % ----
+      - record: api:retry_success_rate:by_service
+        expr: sum by (service) (rate(api_fetch_retry_total{outcome="success"}[5m]))
+
+      - record: api:retry_all_rate:by_service
+        expr: sum by (service) (rate(api_fetch_retry_total[5m]))
+
+      - record: api:retry_success_pct:by_service
+        expr: 100 * api:retry_success_rate:by_service
+                  / ignoring(service)
+                  api:retry_all_rate:by_service
+
+      - record: api:retry_success_pct:total
+        expr: 100 *
+              sum(rate(api_fetch_retry_total{outcome="success"}[5m])) /
+              sum(rate(api_fetch_retry_total[5m]))
+
+      # ---- Idempotency hit rate % of writes ----
+      - record: api:idempotency_hits_rate:by_service
+        expr: sum by (service) (rate(idempotency_hits_total[5m]))
+
+      - record: api:writes_rate:by_service
+        expr: sum by (service) (rate(http_write_requests_total[5m]))
+
+      - record: api:idempotency_hit_pct:by_service
+        expr: 100 * api:idempotency_hits_rate:by_service
+                  / ignoring(service)
+                  api:writes_rate:by_service
+
+      - record: api:idempotency_hit_pct:total
+        expr: 100 *
+              sum(rate(idempotency_hits_total[5m])) /
+              sum(rate(http_write_requests_total[5m]))
+
+      # ---- % responses with degraded mode ----
+      - record: api:responses_rate:by_service
+        expr: sum by (service) (rate(http_responses_total[5m]))
+
+      - record: api:responses_degraded_rate:by_service
+        expr: sum by (service) (rate(http_responses_total{degraded="1"}[5m]))
+
+      - record: api:degraded_pct:by_service
+        expr: 100 * api:responses_degraded_rate:by_service
+                  / ignoring(service)
+                  api:responses_rate:by_service
+
+      - record: api:degraded_pct:total
+        expr: 100 *
+              sum(rate(http_responses_total{degraded="1"}[5m])) /
+              sum(rate(http_responses_total[5m]))
+
+      # ---- Safety baselines (optional) ----
+      # Use a short baseline for "rotations missing" checks
+      - record: api:writes_rate_per_min:by_service
+        expr: api:writes_rate:by_service * 60
+
+  # ======================
+  # === Alerting Rules ===
+  # ======================
+  - name: api_security_alerts
+    interval: 30s
+    rules:
+      # ---- 401→retry success % too low (service-level) ----
+      - alert: ApiFetchRetrySuccessLow
+        expr: api:retry_success_pct:by_service < 95
+        for: 10m
+        labels:
+          severity: critical
+          team: web
+          area: api-security
+        annotations:
+          summary: "401→retry success below 95% (service={{ $labels.service }})"
+          description: |
+            The retry success rate fell below 95% for {{ $labels.service }}.
+            This suggests CSRF rotation/auth instability or upstream timeouts.
+            value={{ $value | printf "%.1f" }}%
+          runbook_url: https://your.runbook/url/api-retry-success
+
+      - alert: ApiFetchRetrySuccessLowWarning
+        expr: api:retry_success_pct:by_service < 98
+        for: 15m
+        labels:
+          severity: warning
+          team: web
+          area: api-security
+        annotations:
+          summary: "401→retry success below 98% (service={{ $labels.service }})"
+          description: |
+            Early signal that retries are less successful than normal.
+            value={{ $value | printf "%.1f" }}%
+
+      # ---- Degraded responses too high (service-level) ----
+      - alert: ApiDegradedResponsesHigh
+        expr: api:degraded_pct:by_service > 15
+        for: 5m
+        labels:
+          severity: critical
+          team: sre
+          area: reliability
+        annotations:
+          summary: "High degraded responses (>15%) (service={{ $labels.service }})"
+          description: |
+            A significant fraction of responses are flagged as degraded.
+            Investigate rate limit stores, caches, or dependencies.
+            value={{ $value | printf "%.1f" }}%
+          runbook_url: https://your.runbook/url/degraded-mode
+
+      - alert: ApiDegradedResponsesElevated
+        expr: api:degraded_pct:by_service > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: sre
+          area: reliability
+        annotations:
+          summary: "Elevated degraded responses (>5%) (service={{ $labels.service }})"
+          description: "Sustained elevated degraded mode. value={{ $value | printf \"%.1f\" }}%"
+
+      # ---- Idempotency hit rate high (service-level) ----
+      - alert: ApiIdempotencyHitRateHigh
+        expr: api:idempotency_hit_pct:by_service > 20
+        for: 5m
+        labels:
+          severity: critical
+          team: web
+          area: api-idempotency
+        annotations:
+          summary: "Idempotency hit rate high (>20%) (service={{ $labels.service }})"
+          description: |
+            Many writes reuse the same Idempotency-Key (or client resubmits).
+            Could indicate client retry storm or UX causing double submits.
+            value={{ $value | printf "%.1f" }}%
+          runbook_url: https://your.runbook/url/idempotency
+
+      - alert: ApiIdempotencyHitRateElevated
+        expr: api:idempotency_hit_pct:by_service > 10
+        for: 10m
+        labels:
+          severity: warning
+          team: web
+          area: api-idempotency
+        annotations:
+          summary: "Idempotency hit rate elevated (>10%) (service={{ $labels.service }})"
+          description: "Potential duplicate-submission pattern. value={{ $value | printf \"%.1f\" }}%"
+
+      # ---- CSRF rotations missing despite writes (service-level) ----
+      # If you're receiving write traffic but rotations are effectively zero, something is off:
+      - alert: CsrfRotationsMissing
+        expr: (api:csrf_rotations_rate_per_min:by_service < 0.05)
+              and (api:writes_rate_per_min:by_service > 1)
+        for: 15m
+        labels:
+          severity: critical
+          team: security
+          area: csrf
+        annotations:
+          summary: "CSRF rotations near zero while receiving writes (service={{ $labels.service }})"
+          description: |
+            The client should rotate CSRF on 401/419 or priming. Rotations/min ~0
+            while writes continue suggests client not primed, headers blocked,
+            or proxy stripping headers.
+            rotations_per_min={{ $value | printf "%.2f" }}
+          runbook_url: https://your.runbook/url/csrf-rotation
+
+      # ---- Optional: CSRF rotations unusually high (possible churn) ----
+      - alert: CsrfRotationsUnusuallyHigh
+        expr: api:csrf_rotations_rate_per_min:by_service > 20
+        for: 10m
+        labels:
+          severity: warning
+          team: security
+          area: csrf
+        annotations:
+          summary: "CSRF rotations unusually high (>20/min) (service={{ $labels.service }})"
+          description: |
+            Excessive rotations can indicate token thrash (cookies missing,
+            constant 401/419, or client not persisting token).
+            rotations_per_min={{ $value | printf "%.2f" }}
+          runbook_url: https://your.runbook/url/csrf-rotation

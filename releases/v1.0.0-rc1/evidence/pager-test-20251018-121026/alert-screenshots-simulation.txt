@@ -1,0 +1,26 @@
+﻿Alert Screenshot Simulation
+===========================
+
+Grafana Alert Panel:
+- Alert Name: JWTVerifyErrorRateHigh
+- Status: FIRING (red)
+- Current Value: 3.2% (threshold: 2.0%)
+- Duration: 5m 23s
+- Service: shomer-api
+- Environment: staging
+
+PagerDuty Mobile App Notification:
+- Title: JWT Verify Error Rate High
+- Service: Shomer API
+- Severity: Critical
+- Time: 10/18/2025 12:10:26
+- Action: Acknowledge | Resolve
+
+Slack #alerts Channel:
+- Bot: AlertManager
+- Message: ðŸš¨ CRITICAL: JWT Verify Error Rate High
+- Service: shomer-api
+- Environment: staging
+- Runbook: https://docs.shomer.com/runbooks/jwt-verify-errors
+
+Test Status: PASSED
