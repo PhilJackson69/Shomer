@@ -1,0 +1,27 @@
+{
+  "stage": "cohorts",
+  "timestamp": "2025-01-18T18:34:00Z",
+  "configuration": {
+    "MFA_ROLLOUT_MODE": "cohorts",
+    "MFA_COHORT_SOURCE": "db",
+    "MFA_COHORT_USER_IDS": "1,2,3,4,5"
+  },
+  "cohort_members": [
+    {"user_id": 1, "username": "admin1", "role": "admin", "added_by": 1, "notes": "Initial rollout cohort"},
+    {"user_id": 2, "username": "admin2", "role": "admin", "added_by": 1, "notes": "Initial rollout cohort"},
+    {"user_id": 3, "username": "admin3", "role": "admin", "added_by": 1, "notes": "Initial rollout cohort"},
+    {"user_id": 4, "username": "admin4", "role": "admin", "added_by": 1, "notes": "Initial rollout cohort"},
+    {"user_id": 5, "username": "admin5", "role": "admin", "added_by": 1, "notes": "Initial rollout cohort"}
+  ],
+  "metrics": {
+    "mfa_enforcement_blocked_total": 12,
+    "mfa_enforcement_decisions_total": 45,
+    "support_tickets_per_hour": 1.2,
+    "user_feedback_score": 4.2,
+    "cohort_enforcement_rate": 100
+  },
+  "alerts_fired": [],
+  "status": "success",
+  "duration_hours": 24,
+  "next_stage": "percent"
+}

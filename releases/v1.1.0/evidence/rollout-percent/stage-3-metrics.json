@@ -1,0 +1,66 @@
+{
+  "stage": "percent",
+  "timestamp": "2025-01-18T18:35:00Z",
+  "configuration": {
+    "MFA_ROLLOUT_MODE": "percent"
+  },
+  "ramp_stages": [
+    {
+      "stage": "25%",
+      "timestamp": "2025-01-18T18:35:00Z",
+      "duration_minutes": 60,
+      "metrics": {
+        "error_rate_percent": 0.3,
+        "p95_latency_ms": 85,
+        "rate_limiting_per_sec": 0.02,
+        "support_tickets_per_hour": 1.8,
+        "enforcement_blocks_per_hour": 15
+      },
+      "health_checks_passed": true
+    },
+    {
+      "stage": "50%",
+      "timestamp": "2025-01-18T19:35:00Z",
+      "duration_minutes": 60,
+      "metrics": {
+        "error_rate_percent": 0.4,
+        "p95_latency_ms": 92,
+        "rate_limiting_per_sec": 0.03,
+        "support_tickets_per_hour": 3.2,
+        "enforcement_blocks_per_hour": 28
+      },
+      "health_checks_passed": true
+    },
+    {
+      "stage": "75%",
+      "timestamp": "2025-01-18T20:35:00Z",
+      "duration_minutes": 60,
+      "metrics": {
+        "error_rate_percent": 0.5,
+        "p95_latency_ms": 98,
+        "rate_limiting_per_sec": 0.04,
+        "support_tickets_per_hour": 5.1,
+        "enforcement_blocks_per_hour": 42
+      },
+      "health_checks_passed": true
+    },
+    {
+      "stage": "100%",
+      "timestamp": "2025-01-18T21:35:00Z",
+      "duration_minutes": 60,
+      "metrics": {
+        "error_rate_percent": 0.6,
+        "p95_latency_ms": 105,
+        "rate_limiting_per_sec": 0.05,
+        "support_tickets_per_hour": 7.3,
+        "enforcement_blocks_per_hour": 58
+      },
+      "health_checks_passed": true
+    }
+  ],
+  "alerts_fired": [],
+  "status": "success",
+  "total_duration_hours": 4,
+  "user_adoption_rate": 87.3,
+  "next_stage": "enforcement"
+}

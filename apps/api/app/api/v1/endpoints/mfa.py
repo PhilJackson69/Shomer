@@ -62,12 +62,33 @@ def verify_totp(
     
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
+    request_id = request.headers.get("X-Request-ID")
     
-    return mfa_service.verify_totp(
+    # Add request ID to response headers
+    response = mfa_service.verify_totp(
         current_user, 
         request_data.code, 
         ip_address, 
         user_agent
+    )
+    
+    # Set response headers
+    response_headers = {
+        "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    }
+    
+    if request_id:
+        response_headers["X-Request-ID"] = request_id
+    
+    # Create response with headers
+    from fastapi import Response as FastAPIResponse
+    return FastAPIResponse(
+        content=response.dict(),
+        status_code=200,
+        headers=response_headers,
+        media_type="application/json"
     )
 
 

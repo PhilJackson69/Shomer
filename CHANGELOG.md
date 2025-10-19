@@ -48,6 +48,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `apps/web/src/components/mfa/RecoveryCodes.tsx` - Recovery codes management with copy/download
   - `apps/web/__tests__/mfa-ui.spec.ts` - Comprehensive UI tests for MFA workflows
 
+- **T+7 Stability Review & Hardening Pack** - Post-rollout stability review and security hardening improvements
+  - `releases/v1.1.0/T+7-Stability-Review.md` - Comprehensive T+7 stability review with metrics and recommendations
+  - `scripts/mfa-chaos-smoke.sh` - Chaos smoke test script for MFA rate limiting and security validation
+  - `apps/api/app/middleware/mfa_rate_limit.py` - Enhanced MFA rate limiting middleware with Retry-After headers
+  - `apps/api/app/metrics/mfa_metrics.py` - Comprehensive MFA metrics collection with end-to-end timing histograms
+  - Enhanced MFA service logging with masked recovery codes and X-Request-ID pass-through
+  - Updated Prometheus rules with new MFA replay window abuse alerts and noise reduction
+  - Enhanced Grafana dashboard with panel links, annotations, and break-glass recovery documentation
+  - Updated SECURITY_MFA.md with comprehensive break-glass recovery procedures and on-call matrix
+
 - **Documentation and Configuration**
   - `docs/SECURITY_MFA.md` - Complete MFA security guide with operational procedures
   - MFA configuration settings and environment variables

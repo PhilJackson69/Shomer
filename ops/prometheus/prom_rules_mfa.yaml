@@ -106,6 +106,18 @@ groups:
           description: "{{ $value }} MFA-related security events in the last 5 minutes"
           runbook_url: "https://docs.shomer.local/runbooks/mfa-security-event"
 
+      # MFA TOTP Replay Window Abuse Alert
+      - alert: MFAReplayWindowAbuse
+        expr: increase(mfa_totp_reuse_window_hits[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: mfa
+        annotations:
+          summary: "MFA TOTP replay window abuse detected"
+          description: "{{ $value }} TOTP replay attempts detected in the last 10 minutes"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-replay-abuse"
+
       # MFA SLO Violation Alerts
       - alert: MFASLOAvailabilityViolation
         expr: |

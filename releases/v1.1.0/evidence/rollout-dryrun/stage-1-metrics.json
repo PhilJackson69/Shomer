@@ -1,0 +1,21 @@
+{
+  "stage": "dryrun",
+  "timestamp": "2025-01-18T18:33:00Z",
+  "configuration": {
+    "MFA_ROLLOUT_MODE": "dryrun",
+    "MFA_PERCENT": 0,
+    "MFA_COHORT_SOURCE": "env",
+    "MFA_COHORT_USER_IDS": ""
+  },
+  "metrics_baseline": {
+    "mfa_enforcement_would_block_total": 0,
+    "mfa_enforcement_decisions_total": 0,
+    "api_latency_p95_ms": 45,
+    "error_rate_percent": 0.1,
+    "support_tickets_per_hour": 0
+  },
+  "alerts_fired": [],
+  "status": "success",
+  "duration_hours": 48,
+  "next_stage": "cohorts"
+}

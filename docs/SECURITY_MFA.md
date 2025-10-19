@@ -168,6 +168,143 @@ MFA_ENFORCE_ADMINS = True  # Environment variable
 3. System administrator can unlock account
 4. User must verify identity before unlock
 
+### Break-Glass Recovery Procedures
+
+#### Emergency Admin Access
+**Purpose:** Provide emergency access when normal MFA recovery is not possible
+
+**Trigger Conditions:**
+- All recovery codes exhausted
+- Admin account locked out
+- MFA system failure
+- Security incident requiring immediate access
+
+**Authorized Personnel:**
+- **Primary:** Security Team Lead (24/7 on-call)
+- **Secondary:** Engineering Manager (business hours)
+- **Escalation:** CTO (critical incidents only)
+
+#### Break-Glass Process
+
+**Step 1: Identity Verification**
+1. Verify caller identity using pre-established procedures
+2. Confirm emergency nature of request
+3. Document reason for break-glass access
+4. Obtain management approval if required
+
+**Step 2: Temporary Access Provision**
+```bash
+# Emergency MFA bypass (audit logged)
+curl -X POST https://api.shomer.local/api/v1/admin/mfa/emergency-bypass \
+  -H "Authorization: Bearer $EMERGENCY_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "admin_user_id",
+    "reason": "emergency_access_required",
+    "approved_by": "security_team_lead",
+    "duration_minutes": 60,
+    "audit_reference": "BREAK_GLASS_20250125_001"
+  }'
+```
+
+**Step 3: Immediate Actions**
+1. User gains temporary access (60-minute window)
+2. User must immediately setup new MFA method
+3. All actions are logged with break-glass audit trail
+4. Security team is notified of emergency access
+
+**Step 4: Post-Access Procedures**
+1. Verify new MFA method is working
+2. Generate new recovery codes
+3. Document incident in security log
+4. Schedule post-incident review
+
+#### Break-Glass Security Controls
+
+**Access Logging:**
+- All break-glass actions logged with special audit trail
+- Real-time alerts to security team
+- Automatic escalation if not resolved within timeframe
+
+**Time Limits:**
+- Maximum 60 minutes emergency access
+- Automatic revocation if not used within 15 minutes
+- Single-use only (cannot be extended)
+
+**Audit Requirements:**
+- Document reason for emergency access
+- Record all actions taken during emergency window
+- Post-incident security review required
+- Quarterly audit of break-glass usage
+
+#### Recovery Code Rotation for Admin Accounts
+
+**Process:**
+1. **Monthly Rotation:** Admin recovery codes rotated monthly
+2. **Secure Storage:** Codes stored in encrypted secret vault
+3. **Access Control:** Only authorized personnel can access codes
+4. **Distribution:** Codes distributed via secure channels
+
+**Storage Locations:**
+- **Primary:** HashiCorp Vault (encrypted at rest)
+- **Backup:** AWS Secrets Manager (cross-region)
+- **Emergency:** Physical safe (offline backup)
+
+**Access Matrix:**
+| Role | Recovery Codes | Break-Glass | Emergency Bypass |
+|------|---------------|-------------|------------------|
+| Security Lead | Read | Execute | Execute |
+| Engineering Manager | Read | Execute | Approve |
+| CTO | Read | Approve | Approve |
+| System Admin | None | None | Execute (with approval) |
+
+#### On-Call Matrix
+
+**Primary On-Call (24/7):**
+- **Security Team Lead:** Break-glass procedures, emergency access
+- **Platform SRE:** System-level MFA bypass, infrastructure issues
+
+**Secondary On-Call (Business Hours):**
+- **Engineering Manager:** Approval authority, escalation decisions
+- **DevOps Engineer:** Technical implementation support
+
+**Escalation Path:**
+1. **Level 1:** Security Team Lead (0-15 minutes)
+2. **Level 2:** Engineering Manager (15-30 minutes)
+3. **Level 3:** CTO (30+ minutes or critical incidents)
+
+**Contact Information:**
+- **Security Lead:** security-lead@shomer.local, +1-555-SECURITY
+- **Platform SRE:** platform-sre@shomer.local, +1-555-PLATFORM
+- **Engineering Manager:** eng-manager@shomer.local, +1-555-ENGINEER
+- **CTO:** cto@shomer.local, +1-555-CTO-EMERGENCY
+
+#### Break-Glass Audit Trail
+
+**Required Information:**
+- Timestamp of break-glass activation
+- Identity of person requesting access
+- Identity of person authorizing access
+- Reason for emergency access
+- Actions taken during emergency window
+- Resolution and follow-up actions
+
+**Audit Log Format:**
+```json
+{
+  "event_type": "break_glass_access",
+  "timestamp": "2025-01-25T10:30:00Z",
+  "user_id": "admin_123",
+  "requested_by": "security_team_lead",
+  "authorized_by": "engineering_manager",
+  "reason": "emergency_system_maintenance",
+  "duration_minutes": 60,
+  "actions_taken": ["mfa_reset", "new_recovery_codes"],
+  "audit_reference": "BREAK_GLASS_20250125_001",
+  "security_review_required": true
+}
+```
+
 ### Monitoring and Alerting
 
 #### Security Events

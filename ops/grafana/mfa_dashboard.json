@@ -30,7 +30,17 @@
             }
           }
         },
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "links": [
+          {
+            "title": "MFA Rollout Runbook",
+            "url": "https://docs.shomer.local/runbooks/mfa-rollout"
+          },
+          {
+            "title": "Rollback Procedures",
+            "url": "https://docs.shomer.local/runbooks/mfa-rollback"
+          }
+        ]
       },
       {
         "id": 2,
@@ -243,7 +253,31 @@
       {
         "title": "MFA SLO Documentation",
         "url": "https://docs.shomer.local/slo/mfa"
+      },
+      {
+        "title": "Break-glass Recovery",
+        "url": "https://docs.shomer.local/runbooks/mfa-break-glass"
       }
-    ]
+    ],
+    "annotations": {
+      "list": [
+        {
+          "name": "MFA Rollout Milestones",
+          "datasource": "prometheus",
+          "enable": true,
+          "expr": "mfa_rollout_milestone",
+          "iconColor": "blue",
+          "tags": ["rollout", "milestone"]
+        },
+        {
+          "name": "MFA Alerts",
+          "datasource": "prometheus", 
+          "enable": true,
+          "expr": "ALERTS{alertname=~\"MFA.*\"}",
+          "iconColor": "red",
+          "tags": ["alert", "mfa"]
+        }
+      ]
+    }
   }
 }

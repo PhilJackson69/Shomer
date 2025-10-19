@@ -6,6 +6,8 @@ import pyotp
 import qrcode
 import io
 import base64
+import time
+import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
@@ -35,6 +37,13 @@ class MFAService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.logger = logging.getLogger(__name__)
+        
+        # Metrics tracking
+        self.metrics = {
+            'setup_start_times': {},  # Track MFA setup start times for end-to-end metrics
+            'verification_times': {}  # Track verification times
+        }
 
     def get_or_create_user_mfa(self, user: User) -> UserMFA:
         """Get or create MFA settings for a user."""
@@ -48,13 +57,18 @@ class MFAService:
 
     def setup_totp(self, user: User) -> MFASetupResponse:
         """Setup TOTP for a user."""
+        setup_start_time = time.time()
+        
+        # Track setup start time for end-to-end metrics
+        self.metrics['setup_start_times'][user.id] = setup_start_time
+        
         user_mfa = self.get_or_create_user_mfa(user)
         
         # Generate TOTP secret
         secret = pyotp.random_base32()
         secret_hash = pwd_context.hash(secret)
         
-        # Generate recovery codes
+        # Generate recovery codes (masked in logs)
         recovery_codes = [secrets.token_urlsafe(8) for _ in range(MAX_RECOVERY_CODES)]
         recovery_codes_hash = json.dumps([pwd_context.hash(code) for code in recovery_codes])
         
@@ -72,6 +86,16 @@ class MFAService:
             issuer_name=TOTP_ISSUER
         )
         
+        # Log setup completion (with masked recovery codes)
+        masked_codes = [code[:4] + "*" * 4 for code in recovery_codes]
+        self.logger.info(f"MFA TOTP setup completed for user {user.id}", extra={
+            'user_id': user.id,
+            'user_email': user.email,
+            'setup_duration_ms': int((time.time() - setup_start_time) * 1000),
+            'recovery_codes_count': len(recovery_codes),
+            'recovery_codes_masked': masked_codes
+        })
+        
         return MFASetupResponse(
             secret=secret,  # Only returned during setup
             qr_code_url=qr_code_url,
@@ -80,6 +104,8 @@ class MFAService:
 
     def verify_totp(self, user: User, code: str, ip_address: str = None, user_agent: str = None) -> MFAVerifyResponse:
         """Verify TOTP code for a user."""
+        verification_start_time = time.time()
+        
         user_mfa = self.get_or_create_user_mfa(user)
         
         if not user_mfa.totp_secret_hash:
@@ -116,10 +142,36 @@ class MFAService:
                 
         except Exception as e:
             failure_reason = 'verification_error'
-            print(f"TOTP verification error: {e}")
+            self.logger.error(f"TOTP verification error: {e}", extra={
+                'user_id': user.id,
+                'error': str(e)
+            })
         
         # Record attempt
         self._record_attempt(user.id, 'totp', success, ip_address, user_agent, failure_reason)
+        
+        # Track verification time for metrics
+        verification_time = time.time() - verification_start_time
+        self.metrics['verification_times'][user.id] = verification_time
+        
+        # Calculate end-to-end time if this is first successful verification after setup
+        end_to_end_time = None
+        if success and user.id in self.metrics['setup_start_times']:
+            end_to_end_time = time.time() - self.metrics['setup_start_times'][user.id]
+            # Clean up setup start time
+            del self.metrics['setup_start_times'][user.id]
+        
+        # Log verification attempt (with masked code)
+        masked_code = code[:2] + "*" * (len(code) - 2) if len(code) > 2 else "*" * len(code)
+        self.logger.info(f"MFA TOTP verification attempt for user {user.id}", extra={
+            'user_id': user.id,
+            'success': success,
+            'failure_reason': failure_reason,
+            'verification_time_ms': int(verification_time * 1000),
+            'end_to_end_time_ms': int(end_to_end_time * 1000) if end_to_end_time else None,
+            'code_masked': masked_code,
+            'ip_address': ip_address
+        })
         
         if success:
             return MFAVerifyResponse(success=True, message="TOTP verification successful")
@@ -147,6 +199,13 @@ class MFAService:
         
         if code_index is None:
             self._record_attempt(user.id, 'recovery', False, ip_address, user_agent, 'invalid_code')
+            # Log failed recovery code attempt (with masked code)
+            masked_code = recovery_code[:4] + "*" * (len(recovery_code) - 4) if len(recovery_code) > 4 else "*" * len(recovery_code)
+            self.logger.warning(f"MFA recovery code verification failed for user {user.id}", extra={
+                'user_id': user.id,
+                'code_masked': masked_code,
+                'ip_address': ip_address
+            })
             return MFARecoveryResponse(success=False, message="Invalid recovery code")
         
         # Mark code as used
@@ -165,6 +224,16 @@ class MFAService:
         
         self.db.commit()
         self._record_attempt(user.id, 'recovery', True, ip_address, user_agent)
+        
+        # Log successful recovery code usage (with masked code)
+        masked_code = recovery_code[:4] + "*" * (len(recovery_code) - 4) if len(recovery_code) > 4 else "*" * len(recovery_code)
+        self.logger.info(f"MFA recovery code used successfully for user {user.id}", extra={
+            'user_id': user.id,
+            'code_masked': masked_code,
+            'remaining_codes': remaining_codes,
+            'new_codes_generated': new_backup_codes is not None,
+            'ip_address': ip_address
+        })
         
         return MFARecoveryResponse(
             success=True,
