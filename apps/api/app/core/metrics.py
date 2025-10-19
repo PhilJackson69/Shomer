@@ -108,6 +108,55 @@ security_headers_missing_total = Counter(
     ['header_name', 'endpoint']
 )
 
+# MFA metrics
+mfa_enforcement_decisions_total = Counter(
+    'mfa_enforcement_decisions_total',
+    'Total number of MFA enforcement decisions',
+    ['mode', 'percent', 'cohort_source', 'user_role', 'reason', 'enforced']
+)
+
+mfa_enforcement_blocked_total = Counter(
+    'mfa_enforcement_blocked_total',
+    'Total number of MFA enforcement blocks',
+    ['mode', 'reason']
+)
+
+mfa_enforcement_allowed_total = Counter(
+    'mfa_enforcement_allowed_total',
+    'Total number of MFA enforcement allowances',
+    ['mode', 'reason']
+)
+
+mfa_enforcement_would_block_total = Counter(
+    'mfa_enforcement_would_block_total',
+    'Total number of MFA enforcement would-block decisions (dryrun)',
+    ['mode', 'reason']
+)
+
+mfa_totp_verify_total = Counter(
+    'mfa_totp_verify_total',
+    'Total number of TOTP verification attempts',
+    ['status', 'failure_reason']
+)
+
+mfa_recovery_verify_total = Counter(
+    'mfa_recovery_verify_total',
+    'Total number of recovery code verification attempts',
+    ['status', 'failure_reason']
+)
+
+mfa_webauthn_verify_total = Counter(
+    'mfa_webauthn_verify_total',
+    'Total number of WebAuthn verification attempts',
+    ['status', 'failure_reason']
+)
+
+mfa_api_latency_seconds = Histogram(
+    'mfa_api_latency_seconds',
+    'MFA API endpoint latency',
+    ['route', 'method', 'status']
+)
+
 
 def hash_ip(ip: str) -> str:
     """Hash IP address for privacy."""
@@ -330,6 +379,99 @@ def update_active_keys_count(count: int):
         count: Number of active keys
     """
     security_active_keys_count.set(count)
+
+
+def record_mfa_enforcement_decision(enforced: bool, reason: str, labels: dict):
+    """
+    Record MFA enforcement decision.
+    
+    Args:
+        enforced: Whether MFA was enforced
+        reason: Reason for the decision
+        labels: Additional labels for the metric
+    """
+    # Record the decision
+    mfa_enforcement_decisions_total.labels(**labels).inc()
+    
+    # Record specific outcomes
+    if enforced:
+        mfa_enforcement_blocked_total.labels(
+            mode=labels.get('mode', 'unknown'),
+            reason=reason
+        ).inc()
+    else:
+        mfa_enforcement_allowed_total.labels(
+            mode=labels.get('mode', 'unknown'),
+            reason=reason
+        ).inc()
+        
+        # In dryrun mode, also record would-block decisions
+        if labels.get('mode') == 'dryrun' and reason.startswith('dryrun_'):
+            actual_reason = reason.replace('dryrun_', '')
+            if actual_reason in ['cohort_member', 'percent_', 'full_enforcement']:
+                mfa_enforcement_would_block_total.labels(
+                    mode=labels.get('mode', 'unknown'),
+                    reason=actual_reason
+                ).inc()
+
+
+def record_mfa_totp_verification(status: str, failure_reason: str = None):
+    """
+    Record TOTP verification attempt.
+    
+    Args:
+        status: Verification status (success, failure)
+        failure_reason: Reason for failure if applicable
+    """
+    mfa_totp_verify_total.labels(
+        status=status,
+        failure_reason=failure_reason or 'none'
+    ).inc()
+
+
+def record_mfa_recovery_verification(status: str, failure_reason: str = None):
+    """
+    Record recovery code verification attempt.
+    
+    Args:
+        status: Verification status (success, failure)
+        failure_reason: Reason for failure if applicable
+    """
+    mfa_recovery_verify_total.labels(
+        status=status,
+        failure_reason=failure_reason or 'none'
+    ).inc()
+
+
+def record_mfa_webauthn_verification(status: str, failure_reason: str = None):
+    """
+    Record WebAuthn verification attempt.
+    
+    Args:
+        status: Verification status (success, failure)
+        failure_reason: Reason for failure if applicable
+    """
+    mfa_webauthn_verify_total.labels(
+        status=status,
+        failure_reason=failure_reason or 'none'
+    ).inc()
+
+
+def record_mfa_api_latency(route: str, method: str, status: str, duration: float):
+    """
+    Record MFA API endpoint latency.
+    
+    Args:
+        route: API route
+        method: HTTP method
+        status: Response status
+        duration: Request duration in seconds
+    """
+    mfa_api_latency_seconds.labels(
+        route=route,
+        method=method,
+        status=status
+    ).observe(duration)
 
 
 def security_event_timer(event_type: str):

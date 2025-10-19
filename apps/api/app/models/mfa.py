@@ -59,3 +59,18 @@ class MFAAttempt(Base):
 
     # Relationships
     user = relationship("User")
+
+
+class MFACohortMember(Base):
+    """MFA rollout cohort membership for staged deployment."""
+    __tablename__ = "mfa_cohort_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    added_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Admin who added user
+    added_at = Column(DateTime(timezone=True), server_default=func.now())
+    notes = Column(String(500), nullable=True)  # Optional notes about why user was added
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    added_by_user = relationship("User", foreign_keys=[added_by])

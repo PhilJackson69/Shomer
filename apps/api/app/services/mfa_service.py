@@ -25,6 +25,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # MFA Configuration
 TOTP_ISSUER = getattr(settings, 'TOTP_ISSUER', 'Shomer')
 TOTP_WINDOW = getattr(settings, 'TOTP_WINDOW', 1)
+MFA_TEST_MODE = getattr(settings, 'MFA_TEST_MODE', False)
 MAX_RECOVERY_CODES = 10
 RECOVERY_CODE_LENGTH = 12
 
@@ -95,21 +96,23 @@ class MFAService:
         failure_reason = 'invalid_code'
         
         try:
-            # In a real implementation, you would decrypt the secret from storage
-            # For this implementation, we'll simulate TOTP verification
-            # The actual verification would use pyotp.TOTP(secret).verify(code, valid_window=TOTP_WINDOW)
-            
-            # Simulate TOTP verification (replace with actual implementation)
-            # For demo purposes, accept any 6-digit code
-            if len(code) == 6 and code.isdigit():
-                success = True
-                failure_reason = None
-                
-                # Update last used code for replay protection
-                user_mfa.last_totp_used = code
-                self.db.commit()
+            if MFA_TEST_MODE:
+                # In test mode, accept any 6-digit code for deterministic testing
+                if len(code) == 6 and code.isdigit():
+                    success = True
+                    failure_reason = None
+                    
+                    # Update last used code for replay protection
+                    user_mfa.last_totp_used = code
+                    self.db.commit()
+                else:
+                    failure_reason = 'invalid_format'
             else:
-                failure_reason = 'invalid_format'
+                # In production mode, use real TOTP verification
+                # TODO: Implement proper TOTP verification with decrypted secret
+                # For now, reject all codes in production mode
+                success = False
+                failure_reason = 'verification_error'
                 
         except Exception as e:
             failure_reason = 'verification_error'
@@ -313,36 +316,36 @@ class MFAService:
                 self._record_attempt(user.id, 'webauthn', False, None, None, 'no_challenge')
                 return WebAuthnVerifyResponse(success=False, message="No active challenge found")
             
-            # Verify the credential (simplified for this implementation)
-            # In a real implementation, you would:
-            # 1. Verify the client data JSON
-            # 2. Verify the authenticator data
-            # 3. Verify the signature
-            # 4. Store the credential
-            
-            # For demo purposes, accept any valid-looking credential
-            if len(credential_id) > 10 and len(client_data_json) > 10:
-                # Create WebAuthn credential record
-                user_mfa = self.get_or_create_user_mfa(user)
-                credential = WebAuthnCredential(
-                    user_mfa_id=user_mfa.id,
-                    credential_id=credential_id,
-                    public_key=client_data_json,  # Simplified storage
-                    name=challenge_data['credential_name']
-                )
-                self.db.add(credential)
-                
-                # Enable WebAuthn for user
-                user_mfa.webauthn_enabled = True
-                user_mfa.enabled = True  # Enable MFA if not already enabled
-                
-                self.db.commit()
-                
-                self._record_attempt(user.id, 'webauthn', True)
-                return WebAuthnVerifyResponse(success=True, message="WebAuthn credential registered successfully")
+            # Verify the credential
+            if MFA_TEST_MODE:
+                # In test mode, accept any valid-looking credential for deterministic testing
+                if len(credential_id) > 10 and len(client_data_json) > 10:
+                    # Create WebAuthn credential record
+                    user_mfa = self.get_or_create_user_mfa(user)
+                    credential = WebAuthnCredential(
+                        user_mfa_id=user_mfa.id,
+                        credential_id=credential_id,
+                        public_key=client_data_json,  # Simplified storage
+                        name=challenge_data['credential_name']
+                    )
+                    self.db.add(credential)
+                    
+                    # Enable WebAuthn for user
+                    user_mfa.webauthn_enabled = True
+                    user_mfa.enabled = True  # Enable MFA if not already enabled
+                    
+                    self.db.commit()
+                    
+                    self._record_attempt(user.id, 'webauthn', True)
+                    return WebAuthnVerifyResponse(success=True, message="WebAuthn credential registered successfully")
+                else:
+                    self._record_attempt(user.id, 'webauthn', False, None, None, 'invalid_credential')
+                    return WebAuthnVerifyResponse(success=False, message="Invalid WebAuthn credential")
             else:
-                self._record_attempt(user.id, 'webauthn', False, None, None, 'invalid_credential')
-                return WebAuthnVerifyResponse(success=False, message="Invalid WebAuthn credential")
+                # In production mode, use real WebAuthn verification
+                # TODO: Implement proper WebAuthn verification
+                self._record_attempt(user.id, 'webauthn', False, None, None, 'production_mode')
+                return WebAuthnVerifyResponse(success=False, message="WebAuthn verification not implemented in production mode")
                 
         except ImportError:
             # Fallback if webauthn library is not available

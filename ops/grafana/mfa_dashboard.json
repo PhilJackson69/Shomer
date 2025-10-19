@@ -1,0 +1,249 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "MFA Rollout Dashboard",
+    "tags": ["mfa", "security", "rollout"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "MFA Rollout Mode",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "mfa_enforcement_decisions_total{mode!=\"off\"}",
+            "legendFormat": "{{mode}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 10}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "MFA Enforcement Decisions",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mfa_enforcement_decisions_total[5m])",
+            "legendFormat": "{{mode}} - {{enforced}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "MFA TOTP Success/Failure Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mfa_totp_verify_total{status=\"success\"}[5m])",
+            "legendFormat": "TOTP Success"
+          },
+          {
+            "expr": "rate(mfa_totp_verify_total{status=\"failure\"}[5m])",
+            "legendFormat": "TOTP Failure"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "MFA Recovery Code Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mfa_recovery_verify_total{status=\"success\"}[5m])",
+            "legendFormat": "Recovery Success"
+          },
+          {
+            "expr": "rate(mfa_recovery_verify_total{status=\"failure\"}[5m])",
+            "legendFormat": "Recovery Failure"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "MFA WebAuthn Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mfa_webauthn_verify_total{status=\"success\"}[5m])",
+            "legendFormat": "WebAuthn Success"
+          },
+          {
+            "expr": "rate(mfa_webauthn_verify_total{status=\"failure\"}[5m])",
+            "legendFormat": "WebAuthn Failure"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8}
+      },
+      {
+        "id": 6,
+        "title": "MFA API Latency (P95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(mfa_api_latency_seconds_bucket[5m]))",
+            "legendFormat": "P95 Latency"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(mfa_api_latency_seconds_bucket[5m]))",
+            "legendFormat": "P50 Latency"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "MFA Enforcement Blocks",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mfa_enforcement_blocked_total[5m])",
+            "legendFormat": "{{mode}} - {{reason}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 8,
+        "title": "MFA Rate Limiting",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rate_limit_hits_total{endpoint=~\"/mfa.*\"}[5m])",
+            "legendFormat": "{{endpoint}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 9,
+        "title": "MFA Security Events",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(security_events_total{event_type=~\".*mfa.*\"}[5m])",
+            "legendFormat": "{{severity}} - {{event_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      },
+      {
+        "id": 10,
+        "title": "MFA SLO - Availability",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(
+              rate(mfa_totp_verify_total{status=\"success\"}[5m]) +
+              rate(mfa_recovery_verify_total{status=\"success\"}[5m]) +
+              rate(mfa_webauthn_verify_total{status=\"success\"}[5m])
+            ) / (
+              rate(mfa_totp_verify_total[5m]) +
+              rate(mfa_recovery_verify_total[5m]) +
+              rate(mfa_webauthn_verify_total[5m])
+            ) * 100",
+            "legendFormat": "Availability %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 32}
+      },
+      {
+        "id": 11,
+        "title": "MFA SLO - Error Budget",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(
+              rate(mfa_totp_verify_total{status=\"failure\"}[5m]) +
+              rate(mfa_recovery_verify_total{status=\"failure\"}[5m]) +
+              rate(mfa_webauthn_verify_total{status=\"failure\"}[5m])
+            ) / (
+              rate(mfa_totp_verify_total[5m]) +
+              rate(mfa_recovery_verify_total[5m]) +
+              rate(mfa_webauthn_verify_total[5m])
+            ) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 3},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 32}
+      },
+      {
+        "id": 12,
+        "title": "MFA Cohort Membership",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "mfa_enforcement_decisions_total{mode=\"cohorts\"}",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 32}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 1,
+    "links": [
+      {
+        "title": "MFA Rollout Runbook",
+        "url": "https://docs.shomer.local/runbooks/mfa-rollout"
+      },
+      {
+        "title": "MFA SLO Documentation",
+        "url": "https://docs.shomer.local/slo/mfa"
+      }
+    ]
+  }
+}

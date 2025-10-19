@@ -90,8 +90,15 @@ class Settings(BaseSettings):
     
     # MFA Configuration
     MFA_ENFORCE_ADMINS: bool = True
+    MFA_TEST_MODE: bool = False  # Enable test mode for CI
     TOTP_ISSUER: str = "Shomer"
     TOTP_WINDOW: int = 1  # Time window tolerance for TOTP codes
+    
+    # MFA Rollout Configuration
+    MFA_ROLLOUT_MODE: str = "off"  # off|dryrun|cohorts|percent|on
+    MFA_PERCENT: int = 0  # 0-100, only used when MODE=percent
+    MFA_COHORT_SOURCE: str = "env"  # db|env
+    MFA_COHORT_USER_IDS: str = ""  # Comma-separated user IDs for env fallback
 
     @field_validator("API_SECRET_KEY", mode="before")
     @classmethod

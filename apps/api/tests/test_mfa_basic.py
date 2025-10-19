@@ -138,7 +138,7 @@ class TestWebAuthnEndpoints:
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = client.post("/api/v1/mfa/webauthn/register", 
                              json={"credential_name": "Test Key"}, 
-                             headers=Headers)
+                             headers=headers)
         
         assert response.status_code == 200
         data = response.json()

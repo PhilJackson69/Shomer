@@ -1,0 +1,165 @@
+groups:
+  - name: mfa.rules
+    rules:
+      # MFA High Failure Rate Alert
+      - alert: MFAHighFailureRate
+        expr: |
+          (
+            rate(mfa_totp_verify_total{status="failure"}[5m]) +
+            rate(mfa_recovery_verify_total{status="failure"}[5m]) +
+            rate(mfa_webauthn_verify_total{status="failure"}[5m])
+          ) / (
+            rate(mfa_totp_verify_total[5m]) +
+            rate(mfa_recovery_verify_total[5m]) +
+            rate(mfa_webauthn_verify_total[5m])
+          ) > 0.15
+        for: 10m
+        labels:
+          severity: warning
+          service: mfa
+        annotations:
+          summary: "MFA failure rate is high"
+          description: "MFA failure rate is {{ $value | humanizePercentage }} for the last 10 minutes"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-high-failure-rate"
+
+      # MFA Enforcement Blocks Spike Alert
+      - alert: MFAEnforcementBlocksSpike
+        expr: increase(mfa_enforcement_blocked_total[10m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: mfa
+        annotations:
+          summary: "High number of MFA enforcement blocks"
+          description: "{{ $value }} MFA enforcement blocks in the last 10 minutes"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-enforcement-spike"
+
+      # MFA API Latency High Alert
+      - alert: MFAApiLatencyP95High
+        expr: histogram_quantile(0.95, rate(mfa_api_latency_seconds_bucket[5m])) > 0.4
+        for: 5m
+        labels:
+          severity: warning
+          service: mfa
+        annotations:
+          summary: "MFA API latency is high"
+          description: "95th percentile MFA API latency is {{ $value }}s"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-high-latency"
+
+      # MFA Recovery Code Usage Spike Alert
+      - alert: MFARecoveryCodeUsageSpike
+        expr: increase(mfa_recovery_verify_total{status="success"}[1h]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: mfa
+        annotations:
+          summary: "High recovery code usage"
+          description: "{{ $value }} recovery codes used in the last hour"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-recovery-spike"
+
+      # MFA Rollout Mode Change Alert
+      - alert: MFARolloutModeChange
+        expr: changes(mfa_enforcement_decisions_total{mode!="off"}[1h]) > 0
+        for: 0m
+        labels:
+          severity: info
+          service: mfa
+        annotations:
+          summary: "MFA rollout mode changed"
+          description: "MFA rollout mode has changed in the last hour"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-rollout-change"
+
+      # MFA Service Down Alert
+      - alert: MFAServiceDown
+        expr: up{job="shomer-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: mfa
+        annotations:
+          summary: "MFA service is down"
+          description: "MFA service has been down for more than 1 minute"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-service-down"
+
+      # MFA Rate Limiting Alert
+      - alert: MFARateLimitHigh
+        expr: rate(rate_limit_hits_total{endpoint=~"/mfa.*"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: mfa
+        annotations:
+          summary: "High MFA rate limiting"
+          description: "Rate limiting is active on MFA endpoints"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-rate-limiting"
+
+      # MFA Security Event Alert
+      - alert: MFASecurityEvent
+        expr: increase(security_events_total{event_type=~".*mfa.*"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: mfa
+        annotations:
+          summary: "MFA security event detected"
+          description: "{{ $value }} MFA-related security events in the last 5 minutes"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-security-event"
+
+      # MFA SLO Violation Alerts
+      - alert: MFASLOAvailabilityViolation
+        expr: |
+          (
+            rate(mfa_totp_verify_total{status="success"}[5m]) +
+            rate(mfa_recovery_verify_total{status="success"}[5m]) +
+            rate(mfa_webauthn_verify_total{status="success"}[5m])
+          ) / (
+            rate(mfa_totp_verify_total[5m]) +
+            rate(mfa_recovery_verify_total[5m]) +
+            rate(mfa_webauthn_verify_total[5m])
+          ) < 0.95
+        for: 5m
+        labels:
+          severity: critical
+          service: mfa
+          slo: availability
+        annotations:
+          summary: "MFA availability SLO violation"
+          description: "MFA availability is {{ $value | humanizePercentage }}, below 95% SLO"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-slo-violation"
+
+      - alert: MFASLOLatencyViolation
+        expr: histogram_quantile(0.95, rate(mfa_api_latency_seconds_bucket[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: critical
+          service: mfa
+          slo: latency
+        annotations:
+          summary: "MFA latency SLO violation"
+          description: "95th percentile MFA latency is {{ $value }}s, above 200ms SLO"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-slo-violation"
+
+      # MFA Error Budget Burn Rate Alerts
+      - alert: MFAErrorBudgetBurnRateHigh
+        expr: |
+          (
+            (
+              rate(mfa_totp_verify_total{status="failure"}[5m]) +
+              rate(mfa_recovery_verify_total{status="failure"}[5m]) +
+              rate(mfa_webauthn_verify_total{status="failure"}[5m])
+            ) / (
+              rate(mfa_totp_verify_total[5m]) +
+              rate(mfa_recovery_verify_total[5m]) +
+              rate(mfa_webauthn_verify_total[5m])
+            )
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: mfa
+          slo: error_budget
+        annotations:
+          summary: "MFA error budget burn rate is high"
+          description: "MFA error rate is {{ $value | humanizePercentage }}, above 5% threshold"
+          runbook_url: "https://docs.shomer.local/runbooks/mfa-error-budget"

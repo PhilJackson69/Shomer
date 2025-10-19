@@ -51,6 +51,16 @@ services:
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       X_BEARER_TOKEN: ${X_BEARER_TOKEN:-}
       NEWSAPI_KEY: ${NEWSAPI_KEY:-}
+      # MFA Configuration
+      MFA_ENFORCE_ADMINS: ${MFA_ENFORCE_ADMINS:-true}
+      MFA_TEST_MODE: ${MFA_TEST_MODE:-false}
+      TOTP_ISSUER: ${TOTP_ISSUER:-Shomer}
+      TOTP_WINDOW: ${TOTP_WINDOW:-1}
+      # MFA Rollout Configuration
+      MFA_ROLLOUT_MODE: ${MFA_ROLLOUT_MODE:-off}
+      MFA_PERCENT: ${MFA_PERCENT:-0}
+      MFA_COHORT_SOURCE: ${MFA_COHORT_SOURCE:-env}
+      MFA_COHORT_USER_IDS: ${MFA_COHORT_USER_IDS:-}
     ports:
       - "8000:8000"
     depends_on:

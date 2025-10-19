@@ -76,22 +76,55 @@ def require_mfa_for_admin(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ) -> User:
-    """Require MFA for admin users if enforcement is enabled."""
+    """Require MFA for admin users with staged rollout controls."""
     from app.core.config import settings
     from app.services.mfa_service import MFAService
+    from app.flags.mfa import get_mfa_flags
+    from app.core.metrics import record_mfa_enforcement_decision
     
-    # Check if MFA is enforced for admin users
-    if getattr(settings, 'MFA_ENFORCE_ADMINS', True) and current_user.role == UserRole.ADMIN.value:
-        mfa_service = MFAService(db)
-        
+    # Get rollout flags
+    mfa_flags = get_mfa_flags()
+    
+    # Check if MFA should be enforced for this user
+    should_enforce, reason = mfa_flags.should_enforce_mfa(
+        current_user.id, 
+        current_user.role, 
+        db
+    )
+    
+    # Get metrics labels for observability
+    metrics_labels = mfa_flags.get_metrics_labels(
+        current_user.id, 
+        current_user.role, 
+        db
+    )
+    
+    # Record enforcement decision for metrics
+    record_mfa_enforcement_decision(should_enforce, reason, metrics_labels)
+    
+    # Log enforcement decision (redacted for security)
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"MFA enforcement check: user_id={current_user.id}, "
+        f"role={current_user.role}, mode={mfa_flags.mode.value}, "
+        f"enforced={should_enforce}, reason={reason}"
+    )
+    
+    if should_enforce:
         # Check if user has MFA enabled
-        if not mfa_service.get_mfa_status(current_user).enabled:
+        mfa_service = MFAService(db)
+        mfa_status = mfa_service.get_mfa_status(current_user)
+        
+        if not mfa_status.enabled:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
                     "error": "MFA_REQUIRED",
                     "message": "Multi-factor authentication is required for admin accounts",
-                    "redirect": "/dashboard/settings/security"
+                    "redirect": "/dashboard/settings/security",
+                    "rollout_mode": mfa_flags.mode.value,
+                    "reason": reason
                 }
             )
     

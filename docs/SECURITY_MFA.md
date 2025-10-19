@@ -337,6 +337,130 @@ All MFA endpoints require valid JWT authentication.
 3. **Account Lockouts:** System Administrator
 4. **Compliance Issues:** Legal/Compliance Team
 
+## Rollout Modes
+
+Shomer v1.1.0 supports staged MFA rollout with multiple modes for safe production deployment:
+
+| Mode | Description | Enforcement | Use Case |
+|------|-------------|-------------|----------|
+| `off` | Never block; log only | No | Development, testing |
+| `dryrun` | Log policy decisions; never block; emit would_block metric | No | Pre-rollout validation |
+| `cohorts` | Enforce only for users in cohort | Yes (cohort only) | Initial rollout to select users |
+| `percent` | Consistent hashing on user_id → enforce if hash_mod < MFA_PERCENT | Yes (percentage) | Gradual rollout |
+| `on` | Enforce for all admin roles | Yes (all admins) | Full production deployment |
+
+### Configuration
+
+```bash
+# Rollout mode (off|dryrun|cohorts|percent|on)
+MFA_ROLLOUT_MODE=off
+
+# Percentage for percent mode (0-100)
+MFA_PERCENT=0
+
+# Cohort source (db|env)
+MFA_COHORT_SOURCE=env
+
+# Comma-separated user IDs for env fallback
+MFA_COHORT_USER_IDS=
+```
+
+### Rollout Process
+
+1. **Dry Run (T-2d)**: `MFA_ROLLOUT_MODE=dryrun`
+   - Monitor metrics without enforcement
+   - Validate rollout logic
+   - Check for issues
+
+2. **Cohort Testing (T-1d)**: `MFA_ROLLOUT_MODE=cohorts`
+   - Test with 5-10 admin users
+   - Validate user experience
+   - Monitor support volume
+
+3. **Percentage Rollout (T-0)**: `MFA_ROLLOUT_MODE=percent`
+   - Ramp from 25% → 50% → 75% → 100%
+   - Monitor system performance
+   - Watch for issues
+
+4. **Full Enforcement (T+4h)**: `MFA_ROLLOUT_MODE=on`
+   - Enable for all admin users
+   - Monitor long-term stability
+
+### Support Playbook
+
+#### Handling User Lockouts
+1. **Verify User Identity**
+   - Check user account status
+   - Verify admin role
+   - Confirm MFA requirements
+
+2. **Provide Recovery Options**
+   - Issue new recovery codes
+   - Reset MFA settings
+   - Temporary bypass (audit logged)
+
+3. **Follow-up Actions**
+   - User education
+   - MFA setup assistance
+   - Monitor for repeat issues
+
+#### Recovery Code Exhaustion
+1. **Immediate Response**
+   - Issue new recovery codes
+   - Reset MFA settings
+   - Log security event
+
+2. **Investigation**
+   - Check for suspicious activity
+   - Review MFA attempt logs
+   - Verify user identity
+
+3. **Prevention**
+   - User education
+   - MFA method diversification
+   - Enhanced monitoring
+
+### Test Mode Behavior
+
+#### Environment Variables
+```bash
+MFA_TEST_MODE=true          # Enables deterministic mocks
+MFA_ENFORCE_ADMINS=true     # Enforces admin MFA requirements
+CI=true                     # Identifies CI environment
+```
+
+#### Test Mode Features
+1. **TOTP Mocking:** Accepts any 6-digit code for deterministic testing
+2. **WebAuthn Mocking:** Accepts any valid-looking credential data
+3. **Device Test Skipping:** Hardware-dependent tests are automatically skipped
+4. **Rate Limiting Fallback:** Uses in-memory store when Redis unavailable
+
+#### Security Considerations
+- **Test Mode Only:** Mocks are only active when `MFA_TEST_MODE=true`
+- **Production Safety:** Real verification logic is preserved behind interfaces
+- **Audit Trail:** Test mode operations are clearly marked in logs
+- **No Security Bypass:** Test mode does not weaken production security
+
+#### Device-Bound Test Skipping
+Tests marked with `@pytest.mark.webauthn_device` or `@pytest.mark.mfa_device` are automatically skipped in CI:
+```python
+@pytest.mark.webauthn_device
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="Hardware security key not present in CI")
+def test_real_key_roundtrip():
+    # This test only runs in local environments
+```
+
+### Local Testing
+To run full device tests locally:
+```bash
+# Set environment to disable CI mode
+unset CI
+export MFA_TEST_MODE=false
+
+# Run all tests including device-bound tests
+pytest apps/api/tests/test_mfa_device.py -v
+```
+
 ## Future Enhancements
 
 ### Planned Features
@@ -353,7 +477,7 @@ All MFA endpoints require valid JWT authentication.
 
 ---
 
-**Document Version:** 1.0  
+**Document Version:** 1.1  
 **Last Updated:** 2025-01-18  
 **Next Review:** 2025-04-18  
 **Contact:** security@shomer.local
