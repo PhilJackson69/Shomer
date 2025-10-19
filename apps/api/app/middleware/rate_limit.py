@@ -153,6 +153,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             export_key = f"ratelimit:export:{user_id or self._get_client_ip}"
             limits[export_key] = {'max_requests': 5, 'window_seconds': 60} if not degraded else {'max_requests': 3, 'window_seconds': 60}
         
+        # MFA endpoint limits (security-critical)
+        if '/mfa/' in path:
+            # MFA setup and verification limits
+            if '/mfa/totp/setup' in path:
+                mfa_setup_key = f"ratelimit:mfa:setup:{user_id or self._get_client_ip}"
+                limits[mfa_setup_key] = {'max_requests': 5, 'window_seconds': 600} if not degraded else {'max_requests': 3, 'window_seconds': 600}
+            
+            if '/mfa/totp/verify' in path or '/mfa/totp/enable' in path:
+                mfa_verify_key = f"ratelimit:mfa:verify:{user_id or self._get_client_ip}"
+                limits[mfa_verify_key] = {'max_requests': 10, 'window_seconds': 600} if not degraded else {'max_requests': 8, 'window_seconds': 600}
+            
+            if '/mfa/recovery/verify' in path or '/mfa/disable' in path:
+                mfa_recovery_key = f"ratelimit:mfa:recovery:{user_id or self._get_client_ip}"
+                limits[mfa_recovery_key] = {'max_requests': 5, 'window_seconds': 600} if not degraded else {'max_requests': 3, 'window_seconds': 600}
+            
+            if '/mfa/webauthn/' in path:
+                mfa_webauthn_key = f"ratelimit:mfa:webauthn:{user_id or self._get_client_ip}"
+                limits[mfa_webauthn_key] = {'max_requests': 10, 'window_seconds': 600} if not degraded else {'max_requests': 8, 'window_seconds': 600}
+        
         return limits
 
     async def _check_rate_limit(

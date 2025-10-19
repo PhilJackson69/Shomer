@@ -1,188 +1,276 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('MFA UI Integration Tests', () => {
+test.describe('MFA UI Tests', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to security settings page
-    await page.goto('/dashboard/settings/security');
+    // Mock authentication
+    await page.goto('/login');
+    await page.fill('input[type="email"]', 'admin@example.com');
+    await page.fill('input[type="password"]', 'adminpassword');
+    await page.click('button[type="submit"]');
+    
+    // Wait for redirect to dashboard
+    await page.waitForURL('/dashboard');
+    
+    // Navigate to security settings
+    await page.click('a[href="/dashboard/settings/security"]');
+    await page.waitForURL('/dashboard/settings/security');
   });
 
   test('should display MFA status correctly', async ({ page }) => {
-    // Check if MFA status section is visible
-    await expect(page.locator('h1')).toContainText('Security Settings');
-    
-    // Check if MFA card is present
-    await expect(page.locator('[data-testid="mfa-status-card"]')).toBeVisible();
-    
-    // Check initial MFA status
-    await expect(page.locator('[data-testid="mfa-status"]')).toContainText('Disabled');
+    // Check that MFA status is displayed
+    await expect(page.locator('text=Multi-Factor Authentication')).toBeVisible();
+    await expect(page.locator('text=MFA Status:')).toBeVisible();
+    await expect(page.locator('text=Disabled')).toBeVisible();
+  });
+
+  test('should show enable MFA button when disabled', async ({ page }) => {
+    // Check that enable button is visible
+    await expect(page.locator('button:has-text("Enable MFA")')).toBeVisible();
   });
 
   test('should open TOTP setup modal', async ({ page }) => {
-    // Click enable MFA button
-    await page.click('[data-testid="enable-mfa-button"]');
+    // Click enable TOTP button
+    await page.click('button:has-text("Enable TOTP")');
     
-    // Check if modal is open
-    await expect(page.locator('[data-testid="totp-setup-modal"]')).toBeVisible();
-    
-    // Check modal content
-    await expect(page.locator('h2')).toContainText('Enable TOTP Authentication');
+    // Check that modal opens
+    await expect(page.locator('text=Enable TOTP Authentication')).toBeVisible();
+    await expect(page.locator('text=Set up two-factor authentication using an authenticator app')).toBeVisible();
   });
 
-  test('should show recovery codes modal', async ({ page }) => {
-    // Mock MFA enabled state
-    await page.evaluate(() => {
-      localStorage.setItem('mfa_enabled', 'true');
-    });
+  test('should display TOTP setup steps', async ({ page }) => {
+    // Open TOTP modal
+    await page.click('button:has-text("Enable TOTP")');
     
-    // Reload page to reflect MFA enabled state
-    await page.reload();
+    // Check setup instructions
+    await expect(page.locator('text=TOTP (Time-based One-Time Password) adds an extra layer of security')).toBeVisible();
+    await expect(page.locator('text=Click "Setup TOTP" to generate a QR code')).toBeVisible();
     
-    // Click view recovery codes button
-    await page.click('[data-testid="view-recovery-codes-button"]');
+    // Click setup button
+    await page.click('button:has-text("Setup TOTP")');
     
-    // Check if recovery codes modal is open
-    await expect(page.locator('[data-testid="recovery-codes-modal"]')).toBeVisible();
+    // Check that verification step appears
+    await expect(page.locator('text=Step 1: Add to Authenticator App')).toBeVisible();
+    await expect(page.locator('text=Step 2: Verify Setup')).toBeVisible();
   });
 
-  test('should handle MFA setup workflow', async ({ page }) => {
-    // Start MFA setup
-    await page.click('[data-testid="enable-mfa-button"]');
+  test('should show QR code placeholder', async ({ page }) => {
+    // Open TOTP modal and setup
+    await page.click('button:has-text("Enable TOTP")');
+    await page.click('button:has-text("Setup TOTP")');
     
-    // Click setup TOTP button
-    await page.click('[data-testid="setup-totp-button"]');
+    // Check QR code placeholder
+    await expect(page.locator('text=QR Code would appear here')).toBeVisible();
     
-    // Verify we move to verification step
-    await expect(page.locator('[data-testid="verification-step"]')).toBeVisible();
-    
-    // Check if QR code section is present
-    await expect(page.locator('[data-testid="qr-code-section"]')).toBeVisible();
-    
-    // Check if recovery codes are displayed
-    await expect(page.locator('[data-testid="recovery-codes-section"]')).toBeVisible();
+    // Check secret key display
+    await expect(page.locator('input[readonly]')).toBeVisible();
   });
 
-  test('should validate verification code input', async ({ page }) => {
-    // Start MFA setup and go to verification step
-    await page.click('[data-testid="enable-mfa-button"]');
-    await page.click('[data-testid="setup-totp-button"]');
+  test('should show recovery codes', async ({ page }) => {
+    // Open TOTP modal and setup
+    await page.click('button:has-text("Enable TOTP")');
+    await page.click('button:has-text("Setup TOTP")');
     
-    // Try to submit without entering code
-    await page.click('[data-testid="enable-mfa-button"]');
+    // Check recovery codes section
+    await expect(page.locator('text=Important: Save Your Recovery Codes')).toBeVisible();
+    await expect(page.locator('text=These codes can be used to access your account')).toBeVisible();
     
-    // Check if error message appears
-    await expect(page.locator('[data-testid="error-message"]')).toContainText('Please enter the verification code');
-    
-    // Enter invalid code format
-    await page.fill('[data-testid="verification-code-input"]', '123');
-    
-    // Check if button is still disabled
-    await expect(page.locator('[data-testid="enable-mfa-button"]')).toBeDisabled();
-    
-    // Enter valid code format
-    await page.fill('[data-testid="verification-code-input"]', '123456');
-    
-    // Check if button is now enabled
-    await expect(page.locator('[data-testid="enable-mfa-button"]')).toBeEnabled();
+    // Check that codes are displayed in grid
+    const codeElements = page.locator('.grid.grid-cols-2 .bg-white.p-2.rounded.border');
+    await expect(codeElements).toHaveCount(10);
   });
 
-  test('should handle copy functionality', async ({ page }) => {
-    // Start MFA setup and go to verification step
-    await page.click('[data-testid="enable-mfa-button"]');
-    await page.click('[data-testid="setup-totp-button"]');
+  test('should allow copying recovery codes', async ({ page }) => {
+    // Open TOTP modal and setup
+    await page.click('button:has-text("Enable TOTP")');
+    await page.click('button:has-text("Setup TOTP")');
     
-    // Test copy secret key
-    await page.click('[data-testid="copy-secret-button"]');
+    // Check copy button
+    await expect(page.locator('button:has-text("Copy All Codes")')).toBeVisible();
     
-    // Check if success message appears
-    await expect(page.locator('[data-testid="copy-success-message"]')).toBeVisible();
-    
-    // Test copy recovery codes
-    await page.click('[data-testid="copy-all-codes-button"]');
-    
-    // Check if success message appears
-    await expect(page.locator('[data-testid="copy-success-message"]')).toBeVisible();
+    // Test copy functionality (mocked)
+    await page.click('button:has-text("Copy All Codes")');
   });
 
-  test('should handle download functionality', async ({ page }) => {
-    // Mock recovery codes modal
-    await page.evaluate(() => {
-      localStorage.setItem('mfa_enabled', 'true');
-    });
+  test('should validate TOTP code input', async ({ page }) => {
+    // Open TOTP modal and setup
+    await page.click('button:has-text("Enable TOTP")');
+    await page.click('button:has-text("Setup TOTP")');
     
-    await page.reload();
-    await page.click('[data-testid="view-recovery-codes-button"]');
+    // Check verification code input
+    const codeInput = page.locator('input[placeholder="123456"]');
+    await expect(codeInput).toBeVisible();
+    await expect(codeInput).toHaveAttribute('maxlength', '6');
     
-    // Set up download handler
-    const downloadPromise = page.waitForEvent('download');
-    await page.click('[data-testid="download-codes-button"]');
+    // Test invalid input
+    await codeInput.fill('123');
+    await expect(page.locator('button:has-text("Enable MFA")')).toBeDisabled();
     
-    const download = await downloadPromise;
-    expect(download)suggestedFilename()).toBe('shomer-recovery-codes.txt');
+    // Test valid input
+    await codeInput.fill('123456');
+    await expect(page.locator('button:has-text("Enable MFA")')).toBeEnabled();
   });
 
-  test('should display security information', async ({ page }) => {
-    // Check if security information card is present
-    await expect(page.locator('[data-testid="security-info-card"]')).toBeVisible();
+  test('should open WebAuthn setup modal', async ({ page }) => {
+    // Click enable WebAuthn button
+    await page.click('button:has-text("Enable WebAuthn")');
     
-    // Check if all security information sections are present
-    await expect(page.locator('[data-testid="mfa-info"]')).toBeVisible();
-    await expect(page.locator('[data-testid="totp-info"]')).toBeVisible();
-    await expect(page.locator('[data-testid="webauthn-info"]')).toBeVisible();
-    await expect(page.locator('[data-testid="recovery-codes-info"]')).toBeVisible();
+    // Check that modal opens
+    await expect(page.locator('text=Enable WebAuthn Authentication')).toBeVisible();
+    await expect(page.locator('text=Set up hardware security key authentication')).toBeVisible();
   });
 
-  test('should handle admin enforcement warning', async ({ page }) => {
-    // Mock admin user
-    await page.evaluate(() => {
-      localStorage.setItem('user_role', 'admin');
-    });
+  test('should display WebAuthn setup instructions', async ({ page }) => {
+    // Open WebAuthn modal
+    await page.click('button:has-text("Enable WebAuthn")');
     
-    await page.reload();
+    // Check setup instructions
+    await expect(page.locator('text=WebAuthn allows you to use hardware security keys')).toBeVisible();
+    await expect(page.locator('text=You\'ll need a compatible security key')).toBeVisible();
     
-    // Check if admin enforcement warning is displayed
-    await expect(page.locator('[data-testid="admin-enforcement-warning"]')).toBeVisible();
+    // Check credential name input
+    await expect(page.locator('input[placeholder="e.g., My YubiKey"]')).toBeVisible();
   });
 
-  test('should handle error states', async ({ page }) => {
-    // Mock API error
-    await page.route('/api/v1/mfa/status', route => {
+  test('should validate WebAuthn credential name', async ({ page }) => {
+    // Open WebAuthn modal
+    await page.click('button:has-text("Enable WebAuthn")');
+    
+    // Check that setup button is disabled initially
+    await expect(page.locator('button:has-text("Setup WebAuthn")')).toBeDisabled();
+    
+    // Enter credential name
+    await page.fill('input[placeholder="e.g., My YubiKey"]', 'My Security Key');
+    
+    // Check that setup button is now enabled
+    await expect(page.locator('button:has-text("Setup WebAuthn")')).toBeEnabled();
+  });
+
+  test('should show WebAuthn registration progress', async ({ page }) => {
+    // Open WebAuthn modal and setup
+    await page.click('button:has-text("Enable WebAuthn")');
+    await page.fill('input[placeholder="e.g., My YubiKey"]', 'My Security Key');
+    await page.click('button:has-text("Setup WebAuthn")');
+    
+    // Check loading state
+    await expect(page.locator('text=Please interact with your security key')).toBeVisible();
+    await expect(page.locator('text=You may need to touch your security key')).toBeVisible();
+  });
+
+  test('should display admin MFA enforcement warning', async ({ page }) => {
+    // Check that admin enforcement warning is shown
+    await expect(page.locator('text=Multi-factor authentication is required for admin accounts')).toBeVisible();
+  });
+
+  test('should handle MFA enable success', async ({ page }) => {
+    // Mock successful MFA enable
+    await page.route('/api/v1/mfa/totp/setup', route => {
       route.fulfill({
-        status: 500,
+        status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ detail: 'Internal server error' })
+        body: JSON.stringify({
+          secret: 'JBSWY3DPEHPK3PXP',
+          qr_code_url: 'otpauth://totp/Shomer:admin@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Shomer',
+          backup_codes: ['code1', 'code2', 'code3', 'code4', 'code5', 'code6', 'code7', 'code8', 'code9', 'code10']
+        })
       });
     });
+
+    await page.route('/api/v1/mfa/totp/enable', route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          message: 'MFA enabled successfully'
+        })
+      });
+    });
+
+    // Complete TOTP setup flow
+    await page.click('button:has-text("Enable TOTP")');
+    await page.click('button:has-text("Setup TOTP")');
+    await page.fill('input[placeholder="123456"]', '123456');
+    await page.click('button:has-text("Enable MFA")');
     
-    await page.reload();
-    
-    // Check if error message is displayed
-    await expect(page.locator('[data-testid="error-alert"]')).toBeVisible();
-    await expect(page.locator('[data-testid="error-alert"]')).toContainText('Internal server error');
+    // Check success state
+    await expect(page.locator('text=MFA Enabled Successfully')).toBeVisible();
+    await expect(page.locator('text=Multi-factor authentication has been enabled')).toBeVisible();
   });
 
-  test('should handle loading states', async ({ page }) => {
-    // Mock slow API response
-    await page.route('/api/v1/mfa/status', route => {
-      setTimeout(() => {
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            enabled: false,
-            totp_enabled: false,
-            webauthn_enabled: false,
-            has_backup_codes: false
-          })
-        });
-      }, 1000);
+  test('should handle MFA setup errors', async ({ page }) => {
+    // Mock error response
+    await page.route('/api/v1/mfa/totp/setup', route => {
+      route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          detail: 'MFA setup failed'
+        })
+      });
     });
+
+    // Try to setup TOTP
+    await page.click('button:has-text("Enable TOTP")');
+    await page.click('button:has-text("Setup TOTP")');
     
-    await page.reload();
+    // Check error message
+    await expect(page.locator('text=MFA setup failed')).toBeVisible();
+  });
+
+  test('should handle network errors gracefully', async ({ page }) => {
+    // Mock network error
+    await page.route('/api/v1/mfa/totp/setup', route => {
+      route.abort();
+    });
+
+    // Try to setup TOTP
+    await page.click('button:has-text("Enable TOTP")');
+    await page.click('button:has-text("Setup TOTP")');
     
-    // Check if loading state is displayed
-    await expect(page.locator('[data-testid="loading-skeleton"]')).toBeVisible();
+    // Check error message
+    await expect(page.locator('text=Error setting up TOTP')).toBeVisible();
+  });
+
+  test('should close modals correctly', async ({ page }) => {
+    // Open TOTP modal
+    await page.click('button:has-text("Enable TOTP")');
+    await expect(page.locator('text=Enable TOTP Authentication')).toBeVisible();
     
-    // Wait for loading to complete
-    await expect(page.locator('[data-testid="loading-skeleton"]')).not.toBeVisible();
+    // Close modal with X button
+    await page.click('button[aria-label="Close"]');
+    await expect(page.locator('text=Enable TOTP Authentication')).not.toBeVisible();
+    
+    // Open WebAuthn modal
+    await page.click('button:has-text("Enable WebAuthn")');
+    await expect(page.locator('text=Enable WebAuthn Authentication')).toBeVisible();
+    
+    // Close modal with X button
+    await page.click('button[aria-label="Close"]');
+    await expect(page.locator('text=Enable WebAuthn Authentication')).not.toBeVisible();
+  });
+
+  test('should be responsive on mobile', async ({ page }) => {
+    // Set mobile viewport
+    await page.setViewportSize({ width: 375, height: 667 });
+    
+    // Check that modals are still functional on mobile
+    await page.click('button:has-text("Enable TOTP")');
+    await expect(page.locator('text=Enable TOTP Authentication')).toBeVisible();
+    
+    // Check that content is scrollable on mobile
+    await expect(page.locator('.max-h-\\[90vh\\].overflow-y-auto')).toBeVisible();
+  });
+
+  test('should have proper accessibility attributes', async ({ page }) => {
+    // Open TOTP modal
+    await page.click('button:has-text("Enable TOTP")');
+    
+    // Check for proper ARIA labels and roles
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    await expect(page.locator('input[aria-label]')).toBeVisible();
+    
+    // Check for proper focus management
+    const firstInput = page.locator('input').first();
+    await expect(firstInput).toBeFocused();
   });
 });

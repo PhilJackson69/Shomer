@@ -71,3 +71,28 @@ def require_role(required_role: UserRole) -> Callable[[User], User]:
 
     return role_checker
 
+
+def require_mfa_for_admin(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+) -> User:
+    """Require MFA for admin users if enforcement is enabled."""
+    from app.core.config import settings
+    from app.services.mfa_service import MFAService
+    
+    # Check if MFA is enforced for admin users
+    if getattr(settings, 'MFA_ENFORCE_ADMINS', True) and current_user.role == UserRole.ADMIN.value:
+        mfa_service = MFAService(db)
+        
+        # Check if user has MFA enabled
+        if not mfa_service.get_mfa_status(current_user).enabled:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "MFA_REQUIRED",
+                    "message": "Multi-factor authentication is required for admin accounts",
+                    "redirect": "/dashboard/settings/security"
+                }
+            )
+    
+    return current_user

@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     
     # Git SHA (for deployment tracking)
     GIT_SHA: str | None = None
+    
+    # MFA Configuration
+    MFA_ENFORCE_ADMINS: bool = True
+    TOTP_ISSUER: str = "Shomer"
+    TOTP_WINDOW: int = 1  # Time window tolerance for TOTP codes
 
     @field_validator("API_SECRET_KEY", mode="before")
     @classmethod

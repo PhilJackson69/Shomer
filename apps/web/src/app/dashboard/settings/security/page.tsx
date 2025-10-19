@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import EnableTotpModal from "@/components/mfa/EnableTotpModal";
+import EnableWebAuthnModal from "@/components/mfa/EnableWebAuthnModal";
 import RecoveryCodes from "@/components/mfa/RecoveryCodes";
 import { Shield, Key, Smartphone, AlertTriangle } from "lucide-react";
 
@@ -28,6 +29,7 @@ export default function SecuritySettingsPage() {
   const [mfaConfig, setMfaConfig] = useState<MFAConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEnableModal, setShowEnableModal] = useState(false);
+  const [showWebAuthnModal, setShowWebAuthnModal] = useState(false);
   const [showRecoveryCodes, setShowRecoveryCodes] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,9 +76,36 @@ export default function SecuritySettingsPage() {
     setShowEnableModal(true);
   };
 
+  const handleEnableWebAuthn = () => {
+    setShowWebAuthnModal(true);
+  };
+
   const handleDisableMFA = async () => {
-    // TODO: Implement MFA disable functionality
-    alert("MFA disable functionality will be implemented");
+    const recoveryCode = prompt("Enter a recovery code to disable MFA:");
+    if (!recoveryCode) return;
+
+    try {
+      const response = await fetch("/api/v1/mfa/disable", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("access_token")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recovery_code: recoveryCode,
+        }),
+      });
+
+      if (response.ok) {
+        setError(null);
+        fetchMFAStatus(); // Refresh status
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || "Failed to disable MFA");
+      }
+    } catch (err) {
+      setError("Error disabling MFA");
+    }
   };
 
   const handleMFAEnabled = () => {
@@ -161,6 +190,27 @@ export default function SecuritySettingsPage() {
               </div>
             )}
 
+            {!mfaStatus?.enabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button
+                  variant="outline"
+                  onClick={handleEnableMFA}
+                  className="flex items-center gap-2"
+                >
+                  <Smartphone className="h-4 w-4" />
+                  Enable TOTP
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleEnableWebAuthn}
+                  className="flex items-center gap-2"
+                >
+                  <Key className="h-4 w-4" />
+                  Enable WebAuthn
+                </Button>
+              </div>
+            )}
+
             {mfaConfig?.mfa_enforce_admins && (
               <Alert>
                 <AlertTriangle className="h-4 w-4" />
@@ -236,6 +286,13 @@ export default function SecuritySettingsPage() {
       {showEnableModal && (
         <EnableTotpModal
           onClose={() => setShowEnableModal(false)}
+          onSuccess={handleMFAEnabled}
+        />
+      )}
+
+      {showWebAuthnModal && (
+        <EnableWebAuthnModal
+          onClose={() => setShowWebAuthnModal(false)}
           onSuccess={handleMFAEnabled}
         />
       )}

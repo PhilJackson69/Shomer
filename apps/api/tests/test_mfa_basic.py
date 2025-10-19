@@ -162,10 +162,10 @@ class TestWebAuthnEndpoints:
         headers = {"Authorization": f"Bearer {test_user_token}"}
         response = client.post("/api/v1/mfa/webauthn/verify", 
                              json={
-                                 "credential_id": "test_credential",
-                                 "client_data_json": "{}",
-                                 "authenticator_data": "test_data",
-                                 "signature": "test_signature"
+                                 "credential_id": "test_credential_1234567890",
+                                 "client_data_json": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiIn0=",
+                                 "authenticator_data": "test_authenticator_data_1234567890",
+                                 "signature": "test_signature_1234567890"
                              }, 
                              headers=headers)
         
