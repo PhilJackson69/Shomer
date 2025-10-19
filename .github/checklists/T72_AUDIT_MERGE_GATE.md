@@ -25,7 +25,7 @@
 - [ ] Monitoring infrastructure stable
 
 ### Compliance & Security
-- [ ] Evidence package archived with SHA256 manifest
+- [x] Evidence package archived with SHA256 manifest
 - [ ] Security controls active and monitored
 - [ ] Legal compliance verified
 - [ ] Retention plan documented

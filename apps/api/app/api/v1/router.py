@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     incidents,
     ingestion,
     jwks,
+    mfa,
     nlp,
     reports,
     system_metrics,
@@ -25,6 +26,7 @@ from app.api.v1.endpoints import (
 api_router = APIRouter()
 
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(mfa.router, prefix="/mfa", tags=["mfa"])
 api_router.include_router(csrf.router, prefix="/csrf", tags=["csrf"])
 api_router.include_router(jwks.router, tags=["jwks"])  # No prefix for /.well-known/jwks.json
 api_router.include_router(users.router, prefix="/users", tags=["users"])

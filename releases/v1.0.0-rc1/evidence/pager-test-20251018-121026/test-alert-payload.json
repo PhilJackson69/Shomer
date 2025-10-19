@@ -1,0 +1,20 @@
+﻿{
+    "alerts": [
+        {
+            "status": "firing",
+            "labels": {
+                "alertname": "JWTVerifyErrorRateHigh",
+                "service": "shomer-api",
+                "env": "staging",
+                "severity": "critical"
+            },
+            "annotations": {
+                "summary": "JWT verify error rate is above threshold",
+                "description": "JWT verify error rate has exceeded 2% for 5 minutes",
+                "runbook_url": "https://docs.shomer.com/runbooks/jwt-verify-errors"
+            },
+            "startsAt": "2025-10-18T12:10:26Z",
+            "generatorURL": "http://localhost:8000/api/v1/metrics"
+        }
+    ]
+}

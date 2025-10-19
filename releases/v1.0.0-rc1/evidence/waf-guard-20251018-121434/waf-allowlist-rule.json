@@ -1,0 +1,13 @@
+﻿{
+    "action":  "ALLOW",
+    "rule_id":  "admin-allowlist-20251018-121435",
+    "description":  "Temporary allowlist for admin operations during launch",
+    "conditions":  {
+                       "user_agent":  "Shomer-Admin/1.0",
+                       "path_pattern":  "/auth/*",
+                       "source_ip":  "127.0.0.1"
+                   },
+    "priority":  1,
+    "name":  "Admin IP Allowlist",
+    "expires_at":  "2025-10-18T12:29:35Z"
+}

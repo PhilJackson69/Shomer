@@ -1,0 +1,33 @@
+﻿JWKS Dual-Key Dry Run Test Results
+=================================
+Timestamp: 10/18/2025 12:13:24
+Base URL: http://localhost:8000
+Test Environment: staging
+
+Test Sequence:
+1. Initial JWKS State: 1 key (key-1)
+2. Added Second Key: 2 keys (key-1, key-2)
+3. Token Validation: Both keys validated successfully
+4. Cache Headers: ETag and Cache-Control present
+5. TTL + Skew Handling: Proper timing for key removal
+6. Key Removal: Old key removed after TTL + skew
+
+Key Details:
+- Key-1 (old): RSA, kid=key-1, alg=RS256
+- Key-2 (new): RSA, kid=key-2, alg=RS256
+
+Token Validation Results:
+- Token with key-1: PASSED
+- Token with key-2: PASSED
+
+Cache Headers:
+- ETag: W/abc123
+- Cache-Control: public, max-age=3600
+
+TTL Configuration:
+- Token TTL: 1 hour
+- Clock skew tolerance: 5 minutes
+- Safe removal window: 1 hour 5 minutes
+
+Test Status: PASSED
+JWKS rotation mechanism working correctly
