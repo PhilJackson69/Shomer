@@ -6,7 +6,7 @@ authors = ["Shomer Team"]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = "^0.104.0"
+fastapi = "^0.120.2"
 uvicorn = {extras = ["standard"], version = "^0.24.0"}
 slowapi = "^0.1.9"
 sqlalchemy = "^2.0.0"
