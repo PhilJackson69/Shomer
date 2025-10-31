@@ -79,7 +79,7 @@
     "autoprefixer": "^10.4.17",
     "cross-env": "^10.1.0",
     "cypress": "^13.6.3",
-    "eslint": "^8",
+    "eslint": "^9",
     "eslint-config-next": "^15.0.0",
     "globby": "^15.0.0",
     "jscodeshift": "^17.3.0",
